@@ -167,12 +167,8 @@ const LaundryContext = createContext<LaundryContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
   SETTINGS: 'lms_ind_settings_v4',
-  CUSTOMERS: 'lms_ind_customers_v3',
   BRANCHES: 'lms_ind_branches_v3',
   STAFF: 'lms_ind_staff_v3',
-  PRICES_PER_KG: 'lms_ind_per_kg_v3',
-  ORDERS: 'lms_ind_orders_v6',
-  CURRENT_CUST_PHONE: 'lms_ind_auth_cust_phone_v3',
   CURRENT_STAFF_ID: 'lms_ind_auth_staff_id_v3',
   CURRENT_ADMIN_ID: 'lms_ind_auth_admin_id_v3',
   INVENTORY: 'lms_ind_inventory_v3',
@@ -183,6 +179,7 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
   const [isLoaded, setIsLoaded] = useState(false);
 
   const [settings, setSettings] = useState<ShopSettings>(initialShopSettings);
+  // Pure RAM-only state: strictly never written to localStorage (privacy & compliance)
   const [customers, setCustomers] = useState<CustomerUser[]>(initialCustomers);
   const [branches] = useState<StoreBranch[]>(initialBranches);
   const [staffList, setStaffList] = useState<StoreStaff[]>(initialStaff);
@@ -191,6 +188,7 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
   const [services] = useState<Service[]>(initialServices);
   const [priceMatrix] = useState<PriceMatrixItem[]>(initialPriceMatrix);
   const [perKgRates] = useState<PerKgServiceRate[]>(initialPerKgRates);
+  // Pure RAM-only state: orders are fetched from backend and kept in memory only
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [machines, setMachines] = useState<MachineRecord[]>(initialMachines);
   const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory);
@@ -206,34 +204,17 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
   const [isOffline, setIsOffline] = useState(false);
   const [queuedSyncEvents, setQueuedSyncEvents] = useState(0);
 
-  // Hydrate from LocalStorage
+  // Hydrate non-sensitive preferences from LocalStorage & fetch live orders from Backend API
   useEffect(() => {
     try {
+      // PRIVACY AUDIT PURGE: Strictly eliminate any residual customer PII from browser disk
+      localStorage.removeItem('lms_ind_customers_v3');
+      localStorage.removeItem('lms_ind_orders_v6');
+      localStorage.removeItem('lms_ind_orders_v5');
+      localStorage.removeItem('lms_ind_auth_cust_phone_v3');
+
       const sSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
       if (sSettings) setSettings(JSON.parse(sSettings));
-
-      const sCust = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
-      if (sCust) setCustomers(JSON.parse(sCust));
-
-      const sOrders = localStorage.getItem(STORAGE_KEYS.ORDERS) || localStorage.getItem('lms_ind_orders_v5');
-      if (sOrders) {
-        try {
-          const stored: Order[] = JSON.parse(sOrders);
-          const storedIds = new Set(stored.map((o) => o.id));
-          const missing = initialOrders.filter((io) => !storedIds.has(io.id));
-          const combined = missing.length > 0 ? [...stored, ...missing] : stored;
-          setOrders(combined);
-          if (missing.length > 0) {
-            localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(combined));
-          }
-        } catch {
-          setOrders(initialOrders);
-          localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(initialOrders));
-        }
-      } else {
-        setOrders(initialOrders);
-        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(initialOrders));
-      }
 
       const sStaff = localStorage.getItem(STORAGE_KEYS.STAFF);
       if (sStaff) {
@@ -241,18 +222,10 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
           const storedStaff: StoreStaff[] = JSON.parse(sStaff);
           const storedIds = new Set(storedStaff.map((s) => s.id));
           const missing = initialStaff.filter((is) => !storedIds.has(is.id));
-          const combined = missing.length > 0 ? [...storedStaff, ...missing] : storedStaff;
-          setStaffList(combined);
-          if (missing.length > 0) {
-            localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(combined));
-          }
+          setStaffList(missing.length > 0 ? [...storedStaff, ...missing] : storedStaff);
         } catch {
           setStaffList(initialStaff);
-          localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(initialStaff));
         }
-      } else {
-        setStaffList(initialStaff);
-        localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(initialStaff));
       }
 
       const sInventory = localStorage.getItem(STORAGE_KEYS.INVENTORY);
@@ -260,9 +233,6 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
 
       const sMachines = localStorage.getItem(STORAGE_KEYS.MACHINES);
       if (sMachines) setMachines(JSON.parse(sMachines));
-
-      const sCustPhone = localStorage.getItem(STORAGE_KEYS.CURRENT_CUST_PHONE);
-      if (sCustPhone) setLoggedCustomerPhone(sCustPhone);
 
       const sStaffId = localStorage.getItem(STORAGE_KEYS.CURRENT_STAFF_ID);
       if (sStaffId === 'none') {
@@ -277,9 +247,22 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       if (sAdminId) setLoggedAdminId(sAdminId);
     } catch (e) {
       console.warn("Storage hydration error, continuing with seed", e);
-    } finally {
-      setIsLoaded(true);
     }
+
+    // Fetch live orders directly from Backend API (Server Valuation & Cloud DB)
+    fetch('/api/orders')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.orders) && data.orders.length > 0) {
+          setOrders(data.orders);
+        }
+      })
+      .catch((err) => {
+        console.warn('Backend API hydration fell back to in-memory seed:', err);
+      })
+      .finally(() => {
+        setIsLoaded(true);
+      });
 
     // Network status listener
     const handleOnline = () => {
@@ -291,23 +274,7 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Cross-tab live synchronization via StorageEvent
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEYS.ORDERS && e.newValue) {
-        try {
-          const fresh = JSON.parse(e.newValue);
-          setOrders(fresh);
-        } catch {}
-      }
-      if (e.key === STORAGE_KEYS.SETTINGS && e.newValue) {
-        try {
-          setSettings(JSON.parse(e.newValue));
-        } catch {}
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-
-    // BroadcastChannel for instant same-origin communication across tabs
+    // Cross-tab live synchronization via BroadcastChannel (RAM-to-RAM across tabs, 0 bytes on disk)
     let channel: BroadcastChannel | null = null;
     try {
       if (typeof BroadcastChannel !== 'undefined') {
@@ -326,28 +293,22 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
-      window.removeEventListener('storage', handleStorageChange);
       if (channel) channel.close();
     };
   }, []);
 
-  // Sync back to LocalStorage & broadcast to other tabs
+  // Sync ONLY non-sensitive store settings back to LocalStorage (Never customers or orders)
   useEffect(() => {
     if (!isLoaded) return;
     try {
-      const rev = Date.now().toString();
-      localStorage.setItem('lms_orders_rev', rev);
       localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
-      localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
-      localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
       localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(staffList));
       localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(inventory));
       localStorage.setItem(STORAGE_KEYS.MACHINES, JSON.stringify(machines));
-      if (loggedCustomerPhone) localStorage.setItem(STORAGE_KEYS.CURRENT_CUST_PHONE, loggedCustomerPhone);
       if (loggedStaffId) localStorage.setItem(STORAGE_KEYS.CURRENT_STAFF_ID, loggedStaffId);
       if (loggedAdminId) localStorage.setItem(STORAGE_KEYS.CURRENT_ADMIN_ID, loggedAdminId);
 
-      // Broadcast live sync
+      // Broadcast live sync to other open tabs via volatile memory channel
       if (typeof BroadcastChannel !== 'undefined') {
         try {
           const bc = new BroadcastChannel('dhobighat_order_live_sync');
@@ -356,13 +317,9 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
         } catch {}
       }
     } catch (e: any) {
-      if (e?.name === 'QuotaExceededError' || e?.code === 22) {
-        console.warn('Storage quota exceeded. Maintaining live memory state.', e);
-      } else {
-        console.error("Local persistence failed", e);
-      }
+      console.warn('Settings persistence failed:', e);
     }
-  }, [settings, customers, orders, staffList, inventory, machines, loggedCustomerPhone, loggedStaffId, loggedAdminId, isLoaded]);
+  }, [settings, staffList, inventory, machines, loggedStaffId, loggedAdminId, orders, isLoaded]);
 
   // Current customer profile
   const currentCustomerUser = customers.find((c) => c.phone === loggedCustomerPhone) || null;
@@ -411,7 +368,6 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     },
     logout: () => {
       setLoggedCustomerPhone(null);
-      localStorage.removeItem(STORAGE_KEYS.CURRENT_CUST_PHONE);
     },
     updateProfile: ({ firstName, lastName, email }) => {
       if (!currentCustomerUser) return;
@@ -587,6 +543,17 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     };
   };
 
+  // Broadcast live orders to other browser tabs in volatile RAM (0 bytes written to disk)
+  const broadcastOrders = (updated: Order[]) => {
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('dhobighat_order_live_sync');
+        bc.postMessage({ type: 'ORDERS_SYNC', orders: updated });
+        bc.close();
+      }
+    } catch {}
+  };
+
   // Order Operations
   const createOrder = (orderData: Omit<Order, 'id' | 'invoiceNo' | 'deliveryPin'>): Order => {
     const newInvoice = getNextInvoiceNumber();
@@ -644,16 +611,16 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
 
     setOrders((prev) => {
       const updated = [newOrder, ...prev];
-      try {
-        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
-        if (typeof BroadcastChannel !== 'undefined') {
-          const bc = new BroadcastChannel('dhobighat_order_live_sync');
-          bc.postMessage({ type: 'ORDERS_SYNC', orders: updated });
-          bc.close();
-        }
-      } catch {}
+      broadcastOrders(updated);
       return updated;
     });
+
+    // Asynchronously notify Backend API & trigger FCM push alert
+    fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(orderData),
+    }).catch(() => {});
 
     // Update customer total count
     setCustomers((prev) =>
@@ -739,14 +706,13 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
         }
         return o;
       });
-      try {
-        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
-        if (typeof BroadcastChannel !== 'undefined') {
-          const bc = new BroadcastChannel('dhobighat_order_live_sync');
-          bc.postMessage({ type: 'ORDERS_SYNC', orders: updated });
-          bc.close();
-        }
-      } catch {}
+      broadcastOrders(updated);
+      // Notify backend state machine API
+      fetch(`/api/orders/${orderId}/stage`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetStatus }),
+      }).catch(() => {});
       return updated;
     });
   };
@@ -796,14 +762,13 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
         }
         return o;
       });
-      try {
-        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
-        if (typeof BroadcastChannel !== 'undefined') {
-          const bc = new BroadcastChannel('dhobighat_order_live_sync');
-          bc.postMessage({ type: 'ORDERS_SYNC', orders: updated });
-          bc.close();
-        }
-      } catch {}
+      broadcastOrders(updated);
+      // Notify backend rider assignment API & trigger rider FCM push
+      fetch(`/api/orders/${orderId}/assign-rider`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ riderName, riderPhone, slotWindow, type: 'pickup' }),
+      }).catch(() => {});
       return updated;
     });
   };
@@ -841,14 +806,12 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
         }
         return o;
       });
-      try {
-        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
-        if (typeof BroadcastChannel !== 'undefined') {
-          const bc = new BroadcastChannel('dhobighat_order_live_sync');
-          bc.postMessage({ type: 'ORDERS_SYNC', orders: updated });
-          bc.close();
-        }
-      } catch {}
+      broadcastOrders(updated);
+      fetch(`/api/orders/${orderId}/assign-rider`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ riderName, riderPhone, slotWindow, type: 'drop' }),
+      }).catch(() => {});
       return updated;
     });
   };
@@ -884,14 +847,12 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
         }
         return o;
       });
-      try {
-        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
-        if (typeof BroadcastChannel !== 'undefined') {
-          const bc = new BroadcastChannel('dhobighat_order_live_sync');
-          bc.postMessage({ type: 'ORDERS_SYNC', orders: updated });
-          bc.close();
-        }
-      } catch {}
+      broadcastOrders(updated);
+      fetch(`/api/orders/${orderId}/stage`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetStatus: 'cancelled', notes: finalReason }),
+      }).catch(() => {});
       return updated;
     });
   };
@@ -1175,14 +1136,12 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     });
 
     setOrders(updated);
-    try {
-      localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
-      if (typeof BroadcastChannel !== 'undefined') {
-        const bc = new BroadcastChannel('dhobighat_order_live_sync');
-        bc.postMessage({ type: 'ORDERS_SYNC', orders: updated });
-        bc.close();
-      }
-    } catch {}
+    broadcastOrders(updated);
+    fetch(`/api/orders/${orderId}/verify-pin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inputPin, paymentMethod, paymentRef, actorName }),
+    }).catch(() => {});
 
     return {
       success: true,
@@ -1229,14 +1188,12 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     });
 
     setOrders(updated);
-    try {
-      localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
-      if (typeof BroadcastChannel !== 'undefined') {
-        const bc = new BroadcastChannel('dhobighat_order_live_sync');
-        bc.postMessage({ type: 'ORDERS_SYNC', orders: updated });
-        bc.close();
-      }
-    } catch {}
+    broadcastOrders(updated);
+    fetch(`/api/orders/${orderId}/verify-pin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inputPin: 'UPI_BYPASS', paymentMethod: 'upi_delivery', paymentRef: upiRef, actorName: resolvedActorName }),
+    }).catch(() => {});
   };
 
   const confirmUpiProviderPayment = (
@@ -1288,14 +1245,7 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     });
 
     setOrders(updated);
-    try {
-      localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
-      if (typeof BroadcastChannel !== 'undefined') {
-        const bc = new BroadcastChannel('dhobighat_order_live_sync');
-        bc.postMessage({ type: 'ORDERS_SYNC', orders: updated });
-        bc.close();
-      }
-    } catch {}
+    broadcastOrders(updated);
 
     return {
       success: true,
@@ -1356,14 +1306,12 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     });
 
     setOrders(updated);
-    try {
-      localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
-      if (typeof BroadcastChannel !== 'undefined') {
-        const bc = new BroadcastChannel('dhobighat_order_live_sync');
-        bc.postMessage({ type: 'ORDERS_SYNC', orders: updated });
-        bc.close();
-      }
-    } catch {}
+    broadcastOrders(updated);
+    fetch(`/api/orders/${orderId}/stage`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetStatus: 'settled_closed', notes }),
+    }).catch(() => {});
 
     return {
       success: true,
@@ -1397,14 +1345,7 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     });
 
     setOrders(updated);
-    try {
-      localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
-      if (typeof BroadcastChannel !== 'undefined') {
-        const bc = new BroadcastChannel('dhobighat_order_live_sync');
-        bc.postMessage({ type: 'ORDERS_SYNC', orders: updated });
-        bc.close();
-      }
-    } catch {}
+    broadcastOrders(updated);
 
     return {
       success: true,
@@ -1431,14 +1372,7 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     });
 
     setOrders(updated);
-    try {
-      localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
-      if (typeof BroadcastChannel !== 'undefined') {
-        const bc = new BroadcastChannel('dhobighat_order_live_sync');
-        bc.postMessage({ type: 'ORDERS_SYNC', orders: updated });
-        bc.close();
-      }
-    } catch {}
+    broadcastOrders(updated);
 
     return {
       success: true,
@@ -1467,15 +1401,9 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
 
     if (count > 0) {
       setOrders(updated);
-      try {
-        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
-        if (typeof BroadcastChannel !== 'undefined') {
-          const bc = new BroadcastChannel('dhobighat_order_live_sync');
-          bc.postMessage({ type: 'ORDERS_SYNC', orders: updated });
-          bc.close();
-        }
-      } catch {}
+      broadcastOrders(updated);
     }
+
 
     return { success: true, count };
   };

@@ -6,6 +6,7 @@
 // 4. Exception & Crash vectors (Null pointers, NaN amounts, Invalid dates, Corrupted JSON)
 
 import http from 'http';
+import fs from 'fs';
 
 const BASE_URL = 'http://localhost:3000';
 
@@ -282,6 +283,37 @@ async function runRegressionSuite() {
     jsonCrashed = true;
   }
   assert('Corrupted JSON does not crash state hydration', !jsonCrashed);
+
+  // ------------------------------------------------------------------
+  // 5. CLOUD BACKEND APIS & ZERO LOCAL CUSTOMER DATA
+  // ------------------------------------------------------------------
+  console.log('\n--- 5. CLOUD BACKEND APIS & ZERO LOCAL CUSTOMER DATA ---');
+
+  try {
+    const healthRes = await fetchUrl('/api/health');
+    assert('/api/health endpoint returns 200 OK', healthRes.statusCode === 200);
+    const healthJson = JSON.parse(healthRes.body);
+    assert('/api/health returns valid service payload', healthJson.service === 'DhobiGhat LMS Cloud');
+    assert('/api/health reports uptime and latency', typeof healthJson.uptimeSeconds === 'number' && typeof healthJson.latencyMs === 'number');
+
+    const ordersRes = await fetchUrl('/api/orders');
+    assert('/api/orders endpoint returns 200 OK', ordersRes.statusCode === 200);
+    const ordersJson = JSON.parse(ordersRes.body);
+    assert('/api/orders returns orders array', ordersJson.success === true && Array.isArray(ordersJson.orders));
+  } catch (err) {
+    assert('Cloud Backend API test failed', false, err.message);
+  }
+
+  // Verify Zero Local Storage Customer Data in LaundryContext
+  try {
+    const contextContent = fs.readFileSync('src/context/LaundryContext.tsx', 'utf8');
+    const hasOrderStorageWrite = contextContent.includes('localStorage.setItem(STORAGE_KEYS.ORDERS');
+    const hasCustomerStorageWrite = contextContent.includes('localStorage.setItem(STORAGE_KEYS.CUSTOMERS');
+    assert('Zero Customer PII in LocalStorage compliance (ORDERS never written to disk)', !hasOrderStorageWrite);
+    assert('Zero Customer PII in LocalStorage compliance (CUSTOMERS never written to disk)', !hasCustomerStorageWrite);
+  } catch (err) {
+    assert('Source code privacy compliance check failed', false, err.message);
+  }
 
   // ------------------------------------------------------------------
   // SUMMARY REPORT

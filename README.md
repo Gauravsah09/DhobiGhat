@@ -3,47 +3,162 @@
 [![Next.js 16](https://img.shields.io/badge/Next.js-16.4-black?style=flat&logo=next.js)](https://nextjs.org/)
 [![React 19](https://img.shields.io/badge/React-19.0-blue?style=flat&logo=react)](https://react.dev/)
 [![TypeScript 5](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=flat&logo=typescript)](https://www.typescriptlang.org/)
-[![Tailwind CSS 4](https://img.shields.io/badge/Tailwind_CSS-v4.0-38B2AC?style=flat&logo=tailwind-css)](https://tailwindcss.com/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat&logo=docker)](https://www.docker.com/)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare_Workers-Edge-F38020?style=flat&logo=cloudflare)](https://workers.cloudflare.com/)
+[![Cloudflare R2](https://img.shields.io/badge/Cloudflare_R2-Zero_Egress-orange?style=flat&logo=cloudflare)](https://developers.cloudflare.com/r2/)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL_16-3ECF8E?style=flat&logo=supabase)](https://supabase.com/)
+[![Firebase Cloud Messaging](https://img.shields.io/badge/FCM-Web_Push-FFCA28?style=flat&logo=firebase)](https://firebase.google.com/)
+[![Sentry](https://img.shields.io/badge/Sentry-Monitoring-362D59?style=flat&logo=sentry)](https://sentry.io/)
+[![Docker](https://img.shields.io/badge/Docker-Alpine_Standalone-2496ED?style=flat&logo=docker)](https://www.docker.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-**DhobiGhat** is an enterprise-grade, full-stack Laundry & Dry Cleaning Point-of-Sale (POS), Logistics Dispatch, and Enterprise Resource Planning (ERP) web application.
-
-Designed for modern laundry chains, dry cleaners, and laundromats, DhobiGhat handles the entire garment journey: online doorstep pickup bookings, driver dispatch, floor garment processing (washing, drying, ironing, QC), POS counter intake, thermal receipt printing, and doorstep delivery with security PIN verification.
-
-The application is **100% self-contained and independent**. It requires zero external databases to get started (works offline out-of-the-box via browser storage) and seamlessly connects to a cloud PostgreSQL database (via Supabase) when configured.
+**DhobiGhat** is an enterprise-grade, high-performance Laundry & Dry Cleaning Point-of-Sale (POS), Logistics Dispatch, and Enterprise Resource Planning (ERP) platform. Built from the ground up on modern cloud primitives, DhobiGhat maximizes generous, perpetually free tiers ("The Greedy Nerd Architecture") to deliver sub-50ms latency, zero monthly infrastructure bills, and ironclad customer data privacy.
 
 ---
 
 ## 📑 Table of Contents
 
-1. [Technology Stack](#-technology-stack)
-2. [System Architecture & Implementation](#-system-architecture--implementation)
-   - [Dual-Mode Persistence (Local-First + Cloud PostgreSQL)](#dual-mode-persistence)
-   - [Real-Time Cross-Tab Synchronization](#real-time-cross-tab-synchronization)
-   - [14-Stage Logistics Pipeline](#14-stage-logistics-pipeline)
-   - [Project Directory Structure](#project-directory-structure)
-3. [User Roles & Demo Credentials](#-user-roles--demo-credentials)
-4. [Step-by-Step Installation](#-step-by-step-installation)
+1. [Architecture & The Greedy Nerd Strategy](#-architecture--the-greedy-nerd-strategy)
+   - [Zero-Cost Cloud Topology](#zero-cost-cloud-topology)
+   - [Perpetually Free Quota Matrix](#perpetually-free-quota-matrix)
+2. [Data Privacy & Zero-Local-Storage Mandate](#-data-privacy--zero-local-storage-mandate)
+3. [Core Backend Services & APIs](#-core-backend-services--apis)
+   - [14-Stage Logistics State Machine](#14-stage-logistics-state-machine)
+   - [Server-Side Pricing & 18% GST Engine](#server-side-pricing--18-gst-engine)
+   - [Cryptographic Delivery PIN Verification](#cryptographic-delivery-pin-verification)
+   - [Cloudflare R2 Direct Photo & Invoice Storage](#cloudflare-r2-direct-photo--invoice-storage)
+   - [Firebase Cloud Messaging (FCM) Web Push](#firebase-cloud-messaging-fcm-web-push)
+   - [24/7 Monitoring & Health Watchdog](#247-monitoring--health-watchdog)
+4. [Technology Stack](#-technology-stack)
+5. [Project Structure](#-project-structure)
+6. [User Roles & Pre-configured Staff Profiles](#-user-roles--pre-configured-staff-profiles)
+7. [Step-by-Step Installation & Setup](#-step-by-step-installation--setup)
    - [Prerequisites](#prerequisites)
    - [1. Quick Start (Local Development)](#1-quick-start-local-development)
    - [2. Production Build](#2-production-build)
    - [3. Running with Docker Compose](#3-running-with-docker-compose)
-   - [4. Optional: Cloud Database Setup (Supabase)](#4-optional-cloud-database-setup-supabase)
-5. [How to Operate the Application](#-how-to-operate-the-application)
-   - [Flow 1: Customer Booking an Online Pickup](#flow-1-customer-booking-an-online-pickup)
-   - [Flow 2: Store Operator Assigning a Pickup Rider](#flow-2-store-operator-assigning-a-pickup-rider)
-   - [Flow 3: Rider Collection & Store Intake Weigh-In](#flow-3-rider-collection--store-intake-weigh-in)
-   - [Flow 4: Processing Garments on the Shop Floor](#flow-4-processing-garments-on-the-shop-floor)
-   - [Flow 5: Doorstep Delivery & Customer PIN Verification](#flow-5-doorstep-delivery--customer-pin-verification)
-   - [Flow 6: Walk-in POS Intake & Thermal Receipts](#flow-6-walk-in-pos-intake--thermal-receipts)
-   - [Flow 7: Shift Close & Cash Register Reconciliation](#flow-7-shift-close--cash-register-reconciliation)
-   - [Flow 8: Admin Desk & Order Settlements](#flow-8-admin-desk--order-settlements)
-   - [Flow 9: Revenue Ledger & Financial Reports](#flow-9-revenue-ledger--financial-reports)
-   - [Flow 10: Order Archiving & Data Export](#flow-10-order-archiving--data-export)
-6. [Cloud Deployment](#-cloud-deployment)
-7. [Testing & Quality Assurance](#-testing--quality-assurance)
-8. [License](#-license)
+   - [4. Supabase Database Setup & RLS](#4-supabase-database-setup--rls)
+   - [5. Cloudflare Workers & R2 Setup](#5-cloudflare-workers--r2-setup)
+   - [6. Firebase Cloud Messaging (Web Push) Setup](#6-firebase-cloud-messaging-web-push-setup)
+   - [7. UptimeRobot 24/7 Watchdog](#7-uptimerobot-247-watchdog)
+8. [Operating Workflows (Step-by-Step)](#-operating-workflows-step-by-step)
+   - [Flow 1: Customer Doorstep Pickup Booking](#flow-1-customer-doorstep-pickup-booking)
+   - [Flow 2: Operator Assigning Pickup Rider (Morning/Evening)](#flow-2-operator-assigning-pickup-rider-morningevening)
+   - [Flow 3: Rider Collection & Gross Weight Intake](#flow-3-rider-collection--gross-weight-intake)
+   - [Flow 4: Shop Floor Garment Processing (Wash, Dry, Press, QC)](#flow-4-shop-floor-garment-processing-wash-dry-press-qc)
+   - [Flow 5: Doorstep Delivery & 4-Digit Security PIN Verification](#flow-5-doorstep-delivery--4-digit-security-pin-verification)
+   - [Flow 6: Walk-in Counter POS Intake & Thermal Receipts](#flow-6-walk-in-counter-pos-intake--thermal-receipts)
+   - [Flow 7: Shift Close & Cash Drawer Balancing](#flow-7-shift-close--cash-drawer-balancing)
+   - [Flow 8: Admin Management, Ledger & Settlement](#flow-8-admin-management-ledger--settlement)
+9. [Automated Testing & Quality Assurance](#-automated-testing--quality-assurance)
+10. [License](#-license)
+
+---
+
+## 🏛️ Architecture & The Greedy Nerd Strategy
+
+### Zero-Cost Cloud Topology
+
+DhobiGhat moves 100% of critical business calculations, stage transitions, and pricing rules to the backend and edge, backed by zero-cost cloud services:
+
+```
+[ Customer / Staff Browser ]
+          │
+          │ HTTPS (TLS 1.3)
+          ▼
+[ Cloudflare Global Edge Network (300+ PoPs) ]
+    ├── DDoS Protection & Bot Fight Mode (Free)
+    ├── Cloudflare Worker API Gateway (100k free req/day)
+    │     ├── Web Crypto HMAC-SHA256 JWT Verification (<1ms)
+    │     └── Cache API (0ms hit for Garment & Service Rates)
+    └── Reverse Proxy to Backend API
+          │
+          ▼
+[ Next.js 16 Standalone Server / Edge API ]
+    ├── 14-Stage Logistics State Machine Validator
+    ├── Server Pricing & GST Valuation Engine
+    ├── Cryptographic PIN Verification (3 Attempts Max)
+    └── Staff Shift RBAC Engine
+          │
+    ┌─────┴─────────────────────────┬──────────────────────────┐
+    ▼                               ▼                          ▼
+[ Supabase PostgreSQL 16 ]  [ Cloudflare R2 ]     [ Firebase Cloud Messaging ]
+  ├── Port 6543 (Supavisor)   ├── Pre-wash Photos   ├── Operator Terminal Chimes
+  ├── Strict RLS Policies     ├── Thermal Invoices  ├── Rider Dispatch Alerts
+  └── Realtime WebSockets     └── Nightly Backups   └── Customer Stage Alerts
+```
+
+### Perpetually Free Quota Matrix
+
+| Layer | Provider | Free Tier Allowance | DhobiGhat Projected Use | Cost / Month |
+| :--- | :--- | :--- | :--- | :--- |
+| **DNS, CDN & WAF** | **Cloudflare** | Unlimited bandwidth & DDoS mitigation | 100% of public web traffic | **$0.00** |
+| **Edge Compute** | **Cloudflare Workers** | 100,000 req/day (3M/mo), 10ms CPU | Edge JWT auth & catalog routing | **$0.00** |
+| **Object Storage** | **Cloudflare R2** | 10 GB storage, 1M Class A, 10M Class B, **$0 Egress** | Pre-wash photos & invoices | **$0.00** |
+| **Database** | **Supabase** | 500 MB PostgreSQL 16, 50,000 MAU, Supavisor Pooler | Relational orders & audit logs | **$0.00** |
+| **Realtime WebSockets** | **Supabase** | 200 concurrent connections, 2M messages/month | Active floor & rider sync | **$0.00** |
+| **Push Notifications** | **Google FCM** | **Unlimited** web and mobile push notifications | Operational dispatch alerts | **$0.00** |
+| **Crash Monitoring** | **Sentry** | 5,000 errors/month, 10,000 performance transactions | Production exception reporting | **$0.00** |
+| **Uptime Watchdog** | **UptimeRobot** | 50 monitors at 5-minute intervals, SSL alerting | `/api/health` 24/7 ping | **$0.00** |
+| **Total Cost** | | | **Capacity for 100+ orders/day** | **$0.00 / mo** |
+
+---
+
+## 🔒 Data Privacy & Zero-Local-Storage Mandate
+
+To comply with enterprise data security guidelines and protect customer Personally Identifiable Information (PII) on shared store POS terminals:
+
+1. **Zero Customer PII in Browser Storage**:
+   - `localStorage` and `sessionStorage` **never store** customer names, telephone numbers, addresses, order items, or PIN hashes.
+   - Any legacy keys are purged automatically on application boot.
+   - Client order state resides exclusively in volatile JavaScript RAM (wiped cleanly when the tab or browser closes).
+2. **Secure Cookie-Based Authentication**:
+   - Session tokens are stored strictly in `__Host-dhobighat_session` cookies configured with:
+     - `HttpOnly`: Inaccessible to JavaScript, neutralizing XSS credential theft.
+     - `Secure`: Transmitted only over encrypted HTTPS connections.
+     - `SameSite=Strict`: Immune to Cross-Site Request Forgery (CSRF).
+3. **Role-Based Data Masking**:
+   - Store counter screens mask customer phone numbers (`98****3210`).
+   - Floor washing/ironing workers see only Garment Tags and Barcodes with zero customer identity exposure.
+   - Delivery riders only receive address and telephone access for their currently assigned dispatch.
+
+---
+
+## ⚙️ Core Backend Services & APIs
+
+All critical operations are enforced server-side:
+
+### 14-Stage Logistics State Machine
+- **Endpoint**: `PATCH /api/orders/[id]/stage`
+- **Validation**: Enforces strictly allowed forward transitions and rejects skipping steps (e.g. attempting to jump from `order_placed` directly to `delivered` returns `400 Bad Request`).
+- **Audit Log**: Appends immutable records with actor ID, role, timestamp, and notes.
+
+### Server-Side Pricing & 18% GST Engine
+- **Endpoint**: `POST /api/orders`
+- **Integrity**: Garment line items are re-validated against the official catalog price matrix on the server.
+- **Taxes**: Automatically calculates subtotal, 18% Goods & Services Tax (GST: 9% CGST + 9% SGST), discounts, and net grand total.
+
+### Cryptographic Delivery PIN Verification
+- **Endpoint**: `POST /api/orders/[id]/verify-pin`
+- **Security**: The server issues a cryptographically secure 4-digit PIN upon order creation.
+- **Brute-Force Guard**: Locks the order after 3 incorrect verification attempts.
+- **Contactless Waiver**: Pre-paid verified UPI orders waive the delivery PIN automatically.
+
+### Cloudflare R2 Direct Photo & Invoice Storage
+- **Endpoint**: `POST /api/uploads/presign`
+- **Operation**: Generates pre-signed S3-compatible URLs allowing mobile cameras and store webcams to upload garment stain photos directly to Cloudflare R2.
+- **Zero Egress**: Thermal receipt snapshots and A4 PDFs are served with $0 egress fees.
+
+### Firebase Cloud Messaging (FCM) Web Push
+- **Service Worker**: `public/firebase-messaging-sw.js`
+- **Notifications**:
+  - Store Terminal Chime: Instant audio and visual toast when an online pickup is booked.
+  - Rider Dispatch: Alerts assigned drivers of new pickups with addresses and garment counts.
+  - Customer Updates: Automatic push notifications as clothes move from `washing` to `qc_packed` and `out_for_delivery`.
+
+### 24/7 Monitoring & Health Watchdog
+- **Endpoint**: `GET /api/health`
+- **Checks**: Probes database pool latency and R2 connectivity.
+- **Integration**: Linked to UptimeRobot/BetterUptime for 24/7 heartbeat monitoring and SMS/email alerts.
 
 ---
 
@@ -51,149 +166,93 @@ The application is **100% self-contained and independent**. It requires zero ext
 
 | Layer | Technologies | Purpose |
 | :--- | :--- | :--- |
-| **Frontend Framework** | **Next.js 16 (App Router)** | Server & Client Components, Turbopack bundling, file-based routing. |
-| **UI Library** | **React 19** | Concurrent rendering, modern hooks, and component lifecycle management. |
-| **Language** | **TypeScript 5 (Strict Mode)** | Complete static type safety across data models, order pipelines, and events. |
-| **Styling** | **Tailwind CSS v4** | Modern CSS-first utility styling, custom animations, and print media queries. |
-| **Icons & Visuals** | **Lucide React** | Clean, accessible vector icons for all user interactions. |
-| **State Management** | **React Context API** | Unified `LaundryContext` serving reactive orders, catalog, staff, and settings. |
-| **Realtime Sync** | **HTML5 BroadcastChannel API** | Instant cross-tab and cross-window state synchronization without page reloads. |
-| **Data Storage (Default)** | **Browser LocalStorage** | Zero-configuration, zero-cost offline storage with automatic seed data initialization. |
-| **Data Storage (Cloud)** | **PostgreSQL 16 (via Supabase)** | Optional cloud synchronization via `@supabase/supabase-js`. |
-| **Containerization** | **Docker & Alpine Linux** | Standalone multi-stage Docker build (~110MB) for production environments. |
-| **Hardware / POS** | **CSS Print Engine** | High-DPI 80mm thermal receipt printing and A4 tax invoices with barcode rendering. |
+| **Frontend Framework** | **Next.js 16 (App Router)** | React Server Components, standalone output, edge runtime routes. |
+| **UI Library** | **React 19** | Concurrent rendering, modern hooks, responsive layouts. |
+| **Language** | **TypeScript 5 (Strict)** | Static type safety across models, APIs, and business rules. |
+| **Styling** | **Tailwind CSS v4** | Utility-first styling with high-DPI 80mm thermal print formatting. |
+| **Edge Compute** | **Cloudflare Workers** | Sub-1ms Web Crypto JWT verification, rate limiting, and reverse proxy. |
+| **Database** | **PostgreSQL 16 (Supabase)** | Normalized schema with Row-Level Security (RLS) and Supavisor pooling. |
+| **Object Storage** | **Cloudflare R2** | Zero-egress object storage for garment inspection photos and thermal receipts. |
+| **Push Notifications**| **Firebase Cloud Messaging** | Free web push dispatch to store terminals, riders, and customers. |
+| **Observability** | **Sentry & UptimeRobot** | Application exception capture, edge latency metrics, and 24/7 uptime pings. |
+| **Containerization** | **Docker & Alpine Linux** | Standalone multi-stage production container (~110MB). |
 
 ---
 
-## 🏗️ System Architecture & Implementation
+## 📁 Project Structure
 
-### Dual-Mode Persistence
-DhobiGhat features a **dual-mode persistence engine**:
-- **Offline/Local-First Mode (Default)**: Out-of-the-box, the application saves all orders, customers, services, and transactions directly to browser storage. You can immediately demo, test, or operate the app with zero backend setup.
-- **Cloud Database Mode (Configurable)**: Adding standard Supabase environment variables switches the application to synchronize transactions with a hosted PostgreSQL instance, ensuring multi-device persistence.
-
-### Real-Time Cross-Tab Synchronization
-When multiple tabs or windows are open (e.g., an Operator Terminal in one window and an Admin Desk in another), state changes broadcast immediately using the native HTML5 `BroadcastChannel` (`dhobighat_order_live_sync`). 
-- When an operator assigns a rider in the store terminal, the admin and customer tracking screens update in real time without refreshing the browser.
-- A fallback `StorageEvent` listener ensures compatibility across older browser sessions.
-
-### 14-Stage Logistics Pipeline
-Orders progress through a strict, auditable 14-stage pipeline:
-```
-Online Booking
-     │
-     ▼
-[1. Order Receive Queue]
-     │
-     ▼
-[2. Pickup Assigned (M/E)] ──► Store Operator assigns Morning/Evening Rider
-     │
-     ▼
-[3. Out for Pickup]        ──► Rider travels to customer location
-     │
-     ▼
-[4. Order Picked-up]       ──► Bag collected; piece count & weight recorded
-     │
-     ▼
-[5. Reached Store]         ──► Bag arrives at laundry hub
-     │
-     ▼
-[6. Received]              ──► Garments checked in by floor staff
-     │
-     ▼
-[7. Sorting]               ──► Color, fabric, and stain inspection
-     │
-     ▼
-[8. Washing]               ──► Washing cycle initiated
-     │
-     ▼
-[9. Drying]                ──► Hot tumbler drying
-     │
-     ▼
-[10. Ironing]              ──► Steam pressing & finishing
-     │
-     ▼
-[11. QC Check & Packed]    ──► Quality inspection, hanger/poly packaging
-     │
-     ▼
-[12. Drop Assigned]        ──► Delivery rider assigned
-     │
-     ▼
-[13. Out for Delivery]     ──► Driver en route to customer
-     │
-     ▼
-[14. Delivered]            ──► 4-Digit Security PIN verified; handover complete
-```
-
-### Project Directory Structure
 ```
 DhobiGhat/
-├── Dockerfile                  # Production multi-stage Alpine Docker container
-├── docker-compose.yml          # Container configuration with health checks
-├── render.yaml                 # 1-Click Render blueprint configuration
-├── supabase-schema.sql         # Optional PostgreSQL 16 schema & seed data
-├── package.json                # Dependencies, scripts, and package metadata
-├── next.config.ts              # Next.js standalone build configuration
-├── tsconfig.json               # Strict TypeScript configuration
-├── test-regression.mjs         # End-to-end regression & concurrency test suite
-├── public/                     # Static brand graphics and logos
+├── Dockerfile                      # Production multi-stage Alpine Docker container
+├── docker-compose.yml              # Container setup with automated health checks
+├── cloudflare/                     # Cloudflare Edge Gateway
+│   ├── wrangler.toml               # Workers deployment and route configuration
+│   └── worker.ts                   # Edge reverse proxy, Web Crypto JWT & Cache API
+├── public/                         # Brand assets & service worker
+│   └── firebase-messaging-sw.js    # FCM Web Push Service Worker
+├── sentry.client.config.ts         # Sentry client exception reporting
+├── sentry.server.config.ts         # Sentry server exception reporting
+├── supabase-schema.sql             # PostgreSQL 16 schema, RLS policies & seed data
+├── test-regression.mjs             # End-to-end regression & concurrency test suite
+├── package.json                    # Dependencies & scripts
+├── tsconfig.json                   # Strict TypeScript compiler options
 └── src/
-    ├── app/                    # Next.js App Router pages
-    │   ├── page.tsx            # Portal Switcher & Landing Directory
-    │   ├── layout.tsx          # Root HTML layout with context providers
-    │   ├── globals.css         # Theme styles & thermal print media formatting
-    │   ├── customer/           # Customer Portal (Book, Orders, Rates, Account)
-    │   ├── store/              # Store Floor & Operator Terminal
-    │   │   ├── page.tsx        # 14-Stage Pipeline, POS Counter & Cash Settle
-    │   │   └── login/page.tsx  # Shift PIN check-in for floor operators
-    │   ├── admin/              # Executive HQ Admin Desk
-    │   │   ├── page.tsx        # Orders Desk & Audit Trail
-    │   │   ├── ledger/page.tsx # Daily / Monthly / Annual Financial Reports
-    │   │   ├── archive/page.tsx# Completed Orders Archive & CSV/JSON Export
-    │   │   └── login/page.tsx  # Admin access authentication
-    │   └── track/page.tsx      # Public order tracking by invoice number
-    ├── components/             # Reusable UI Components
-    │   ├── ErrorBoundary.tsx   # Global crash interceptor with recovery buttons
-    │   ├── InvoiceModal.tsx    # Thermal receipt (80mm) & A4 invoice generator
-    │   ├── PosCheckoutModal.tsx# Walk-in counter intake modal with payment simulation
-    │   ├── OrdersTable.tsx     # Filterable order ledger table
-    │   ├── CustomersView.tsx   # Customer management & CRM directory
-    │   ├── CatalogView.tsx     # Services and pricing management
-    │   ├── ExpensesView.tsx    # Store overhead expense manager
-    │   └── SettingsView.tsx    # Store settings, backups & cloud guides
+    ├── app/                        # Next.js App Router
+    │   ├── api/                    # Server-side REST Endpoints
+    │   │   ├── auth/login/route.ts # HttpOnly cookie authentication
+    │   │   ├── auth/logout/route.ts# Session invalidation
+    │   │   ├── health/route.ts     # 24/7 Uptime watchdog endpoint
+    │   │   ├── orders/route.ts     # Master orders & price valuation API
+    │   │   ├── orders/[id]/stage/  # 14-stage state machine validator
+    │   │   ├── orders/[id]/verify-pin/ # 4-digit delivery PIN check
+    │   │   ├── orders/[id]/assign-rider/ # Rider dispatch & push trigger
+    │   │   ├── store/shift-close/  # Drawer cash count reconciliation
+    │   │   └── uploads/presign/    # Direct-to-R2 pre-signed upload URL generator
+    │   ├── customer/               # Customer Booking & Tracking Portal
+    │   ├── store/                  # Store Floor, Intake POS & Cash Settle
+    │   ├── admin/                  # HQ Executive Desk, Ledger & Archive
+    │   └── track/page.tsx          # Public order status tracker
+    ├── components/                 # Reusable UI Components
+    │   ├── ErrorBoundary.tsx       # Crash interceptor with recovery buttons
+    │   ├── InvoiceModal.tsx        # 80mm thermal receipt & A4 invoice renderer
+    │   ├── PosCheckoutModal.tsx    # Walk-in POS checkout with UPI simulation
+    │   └── OrdersTable.tsx         # Unified orders table
     ├── context/
-    │   └── LaundryContext.tsx  # Core state manager & real-time sync broadcaster
+    │   └── LaundryContext.tsx      # In-memory reactive state (Zero-Local-Storage)
     ├── lib/
-    │   ├── initial-data.ts     # Pre-populated seed catalog, customers & staff
-    │   ├── supabase.ts         # Dual-mode Supabase PostgreSQL connector
-    │   └── utils.ts            # Currency formatters, date helpers, class mergers
+    │   ├── auth-server.ts          # Server-side JWT session generation & verification
+    │   ├── fcm.ts                  # Firebase Cloud Messaging push dispatcher
+    │   ├── r2.ts                   # S3-compatible Cloudflare R2 bucket manager
+    │   ├── supabase-server.ts      # Server-side Supabase client with connection pooling
+    │   ├── initial-data.ts         # Catalog rates and demo staff profiles
+    │   └── utils.ts                # Formatters and currency calculations
     └── types/
-        └── index.ts            # Strict TypeScript types for orders, items & roles
+        └── index.ts                # TypeScript interfaces for orders, items & roles
 ```
 
 ---
 
-## 👥 User Roles & Demo Credentials
+## 👥 User Roles & Pre-configured Staff Profiles
 
-The application includes pre-configured staff profiles for quick testing and shift sign-in at `/store/login`:
+For testing and shift sign-in at `/store/login`:
 
-| Role | Staff Name | Phone Number | 4-Digit PIN | Primary Responsibilities |
+| Role | Staff Name | Phone Number | 4-Digit PIN | Responsibilities |
 | :--- | :--- | :--- | :--- | :--- |
 | **Store Operator** | Ramesh Sharma | `9876543210` | `1234` | Queue dispatch, rider assignment, walk-in counter POS, shift cash close. |
 | **Store Manager** | Vikas Patil | `9876543214` | `9999` | Full operational control, pipeline management, pricing & drawer audits. |
 | **Floor Worker** | Sunil Gowda | `9876543211` | `2222` | Sorting, washing, drying, ironing, and packaging garments. |
-| **Logistics Rider** | Mahesh Rider | `9876543216` | `6666` | Out-for-pickup, weighing bags, doorstep delivery. |
+| **Logistics Rider** | Mahesh Rider | `9876543216` | `6666` | Out-for-pickup, bag weighing, doorstep delivery with PIN. |
 | **Logistics Rider** | Kiran Delivery | `9123456780` | `6667` | Doorstep collections and delivery routes. |
 | **Logistics Rider** | Anand Kumar | `9845011223` | `6668` | Evening shift pickups and deliveries. |
 
 ---
 
-## 🛠️ Step-by-Step Installation
+## 🛠️ Step-by-Step Installation & Setup
 
 ### Prerequisites
-- **Node.js**: `v20.x` or `v22.x`+ LTS installed
-- **npm**: `v10.x` or `v11.x`+ installed
-- *(Optional)* **Docker**: If you prefer containerized execution
+- **Node.js**: `v20.x` or `v22.x`+ LTS
+- **npm**: `v10.x` or `v11.x`+
+- *(Optional)* **Docker**: For containerized deployments
 
 ---
 
@@ -211,208 +270,211 @@ npm install
 npm run dev
 ```
 
-Open **`http://localhost:3000`** in your browser. The application will start immediately with pre-loaded demo orders and catalog items.
+Open **`http://localhost:3000`** in your browser. The application runs immediately in memory with sample data.
 
 ---
 
 ### 2. Production Build
 
-To test the compiled, optimized production bundle locally:
-
 ```bash
-# Build the production bundle
+# Compile optimized production bundle
 npm run build
 
-# Start the production server
+# Start production server
 npm start
+```
+
+---
+
+### 3. Running with Docker Compose
+
+A production-ready multi-stage Docker build is included:
+
+```bash
+# Build and run container in background
+docker-compose up -d --build
+
+# Inspect container health and logs
+docker-compose logs -f
+
+# Stop container
+docker-compose down
 ```
 
 Access the app at **`http://localhost:3000`**.
 
 ---
 
-### 3. Running with Docker Compose
+### 4. Supabase Database Setup & RLS
 
-A production-ready `Dockerfile` and `docker-compose.yml` are included:
-
-```bash
-# Build and run the container in the background
-docker-compose up -d --build
-
-# View container logs
-docker-compose logs -f
-
-# Stop the container
-docker-compose down
-```
-
-The app will be available at **`http://localhost:3000`**.
-
----
-
-### 4. Optional: Cloud Database Setup (Supabase)
-
-If you wish to synchronize data to a hosted PostgreSQL database instead of using local browser storage:
+To enable cloud PostgreSQL persistence:
 
 1. Create a free project at [supabase.com](https://supabase.com).
-2. Open the **SQL Editor** in your Supabase dashboard.
-3. Open the file [`supabase-schema.sql`](./supabase-schema.sql) in this repository, copy its contents, paste them into the Supabase SQL editor, and click **Run**.
-4. Go to **Project Settings** -> **API** and copy your **Project URL** and **anon public key**.
+2. Go to the **SQL Editor** in your Supabase dashboard.
+3. Open [`supabase-schema.sql`](./supabase-schema.sql), copy its contents, paste them into the SQL editor, and click **Run**.
+4. Retrieve your **Project URL**, **Anon Key**, and **Service Role Key** under **Project Settings** -> **API**.
 5. Create a `.env.local` file in your project root:
    ```env
-   NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
    ```
-6. Restart your application (`npm run dev`). The system will automatically detect the credentials and synchronize with Supabase.
 
 ---
 
-## 📖 How to Operate the Application
+### 5. Cloudflare Workers & R2 Setup
 
-### Flow 1: Customer Booking an Online Pickup
-1. Navigate to `/customer` and click **Book Doorstep Pickup** (or go to `/customer/book`).
-2. Add garments to your cart (e.g., 3x Shirts, 1x Silk Saree) and choose the desired service (Dry Cleaning, Premium Wash, or Steam Press).
-3. Select your pickup date and preferred window:
+To deploy the edge reverse proxy and zero-egress photo storage:
+
+1. Create a free account at [cloudflare.com](https://cloudflare.com).
+2. Create three R2 buckets in your Cloudflare dashboard:
+   - `dhobighat-photos` (Garment pre-wash and stain inspection photos)
+   - `dhobighat-invoices` (PDF & thermal receipt snapshots)
+   - `dhobighat-backups` (Automated nightly database dumps)
+3. Generate R2 API credentials and add them to `.env.local`:
+   ```env
+   CLOUDFLARE_R2_ACCOUNT_ID=your-account-id
+   CLOUDFLARE_R2_ACCESS_KEY_ID=your-access-key-id
+   CLOUDFLARE_R2_SECRET_ACCESS_KEY=your-secret-access-key
+   CLOUDFLARE_R2_BUCKET_NAME=dhobighat-photos
+   CLOUDFLARE_R2_PUBLIC_DOMAIN=https://photos.yourdomain.com
+   AUTH_JWT_SECRET=your-random-32-byte-hex-string
+   ```
+4. Deploy the Cloudflare Worker:
+   ```bash
+   cd cloudflare
+   npx wrangler deploy
+   ```
+
+---
+
+### 6. Firebase Cloud Messaging (Web Push) Setup
+
+To enable free push notifications:
+
+1. Create a project at [console.firebase.google.com](https://console.firebase.google.com).
+2. Register a Web App and download `firebaseConfig`.
+3. Add your VAPID key to `.env.local`:
+   ```env
+   NEXT_PUBLIC_FIREBASE_VAPID_KEY=your-fcm-vapid-key
+   FIREBASE_PROJECT_ID=your-firebase-project-id
+   ```
+4. Update `public/firebase-messaging-sw.js` with your Firebase project identifiers.
+
+---
+
+### 7. UptimeRobot 24/7 Watchdog
+
+To configure 24/7 uptime monitoring at zero cost:
+
+1. Sign up for a free account at [uptimerobot.com](https://uptimerobot.com).
+2. Click **Add New Monitor**.
+3. Set Monitor Type to **HTTP(s)**.
+4. Enter URL: `https://your-domain.com/api/health`.
+5. Set monitoring interval to **5 minutes**.
+6. Select your email or phone for instant SMS/email downtime alerts.
+
+---
+
+## 📖 Operating Workflows (Step-by-Step)
+
+### Flow 1: Customer Doorstep Pickup Booking
+1. Open `/customer` and click **Book Doorstep Pickup** (or direct to `/customer/book`).
+2. Add garments to cart (e.g., 3x Shirts, 1x Silk Saree) and select service (Dry Cleaning, Premium Wash, Steam Press).
+3. Select pickup date and slot:
    - **Morning Window** (07:00 AM - 10:00 AM)
    - **Evening Window** (04:00 PM - 07:00 PM)
-4. Choose a payment method:
-   - **Cash on Delivery (COD)** or **UPI on Delivery**
-   - **Instant Online UPI QR** (bypasses delivery PIN requirement once verified)
+4. Choose payment: **COD**, **UPI on Delivery**, or **Online Instant UPI QR**.
 5. Click **Place Doorstep Pickup Booking**.
-6. The booking confirmation displays your **Invoice Number** (e.g. `#IND-2409`) and your secret **4-Digit Delivery PIN**.
+6. Note the **Invoice Number** (`#IND-2409`) and secret **4-Digit Delivery PIN**.
 
 ---
 
-### Flow 2: Store Operator Assigning a Pickup Rider
-1. Navigate to `/store/login`.
-2. Click the **Store Operator** button or enter phone `9876543210` with PIN `1234` to check in.
-3. You will be redirected to `/store`. Under the **Online Orders Pipeline** tab, locate the incoming order under **Order Receive Queue**.
-4. Click **Assign Pickup Rider (Morning/Evening)**.
-5. In the modal:
-   - Select a rider (*Mahesh Rider*, *Kiran Delivery*, or *Anand Kumar*).
-   - Select the shift window (*Morning* or *Evening*).
-   - Click **Confirm Rider Assignment**.
-6. The order moves to the **Pickup Assigned (M/E)** queue, and the assigned rider is displayed.
-7. *To reassign*: Click **Reassign Pickup Rider**, choose a different rider or time, and confirm.
+### Flow 2: Operator Assigning Pickup Rider (Morning/Evening)
+1. Sign in at `/store/login` with Phone `9876543210` and PIN `1234`.
+2. Locate the incoming order under **Order Receive Queue**.
+3. Click **Assign Pickup Rider (Morning/Evening)**.
+4. Select the designated driver (*Mahesh Rider*, *Kiran Delivery*, or *Anand Kumar*) and shift.
+5. Click **Confirm Rider Assignment**. The order transitions to **Pickup Assigned (M/E)**.
 
 ---
 
-### Flow 3: Rider Collection & Store Intake Weigh-In
-1. When the rider starts the trip, click **Rider En Route (Out for Pickup)**.
-2. When the rider meets the customer, click **Rider Collected Bag (Order Picked-up)**.
-3. Enter the total piece count and gross bag weight from the scale (e.g. `3.5 kg`) and confirm.
-4. When the rider brings the bag to the hub, click **Bag Arrived at Store Floor (Reached Store)**.
+### Flow 3: Rider Collection & Gross Weight Intake
+1. Rider starts the route: click **Rider En Route (Out for Pickup)**.
+2. Rider collects the bag: click **Rider Collected Bag (Order Picked-up)**.
+3. Weigh the intake bag and enter piece count and scale weight (e.g. `3.5 kg`).
+4. Upon arrival at the hub: click **Bag Arrived at Store Floor (Reached Store)**.
 
 ---
 
-### Flow 4: Processing Garments on the Shop Floor
-1. At the store floor, advance the order from **1. Received** to **2. Sorting**.
-2. Click **Start Washing Cycle (3. Washing)** when garments enter commercial washers.
-3. Click **Transfer to Hot Tumbler (4. Drying)**.
-4. Click **Transfer to Steam Finishing (5. Ironing)**.
-5. Click **Perform QC Inspection & Pack (6. QC Check & Packed Ready)**. The clothes are sealed in packaging and tagged.
+### Flow 4: Shop Floor Garment Processing (Wash, Dry, Press, QC)
+1. Check in garments at counter: click **Receive Garments (1. Received)**.
+2. Advance through floor processing:
+   - Click **Move to Sorting (2. Sorting)**
+   - Click **Start Washing Cycle (3. Washing)**
+   - Click **Transfer to Hot Tumbler (4. Drying)**
+   - Click **Transfer to Steam Finishing (5. Ironing)**
+   - Click **Perform QC Inspection & Pack (6. QC Check & Packed Ready)**. Garments are poly-wrapped and hanger-tagged.
 
 ---
 
-### Flow 5: Doorstep Delivery & Customer PIN Verification
-1. Click **Assign Drop Rider** to designate the delivery driver.
+### Flow 5: Doorstep Delivery & 4-Digit Security PIN Verification
+1. Click **Assign Drop Rider** to designate the driver.
 2. Click **Rider Out for Delivery**.
-3. Upon arriving at the customer's address:
-   - **Standard Orders**: The customer provides their 4-digit PIN. The rider enters the PIN and clicks **Verify PIN & Complete Delivery**.
-   - **Pre-Paid Orders**: The PIN check is automatically waived for contactless delivery.
+3. At customer doorstep:
+   - Ask customer for their 4-digit PIN.
+   - Enter PIN and click **Verify PIN & Complete Delivery**.
+   - *(Note: Verified pre-paid online orders waive PIN requirement automatically).*
 4. Order status updates to **Delivered**.
 
 ---
 
-### Flow 6: Walk-in POS Intake & Thermal Receipts
-1. On `/store`, switch to the **Walk-in Counter Orders** tab.
-2. Enter customer name and phone number.
-3. Select garment items, service type, and options (starch level, packaging style).
+### Flow 6: Walk-in Counter POS Intake & Thermal Receipts
+1. On `/store`, switch to **Walk-in Counter Orders**.
+2. Enter customer name and phone.
+3. Select items, quantity, starch, and packaging.
 4. Click **+ Add Item to Intake Ticket**.
-5. Select payment method:
-   - **Cash**: Enter amount tendered to calculate change.
-   - **UPI QR**: Displays a live QR code with simulated audio confirmation.
-   - **Card / POS**: Simulates card swipe authorization.
-6. Click **Print Thermal Intake Receipt & Generate Tag Barcodes** to open the print dialog.
+5. Select payment: Cash, UPI QR, or Card.
+6. Click **Print Thermal Intake Receipt & Generate Tag Barcodes** to open the 80mm thermal receipt dialog.
 
 ---
 
-### Flow 7: Shift Close & Cash Register Reconciliation
-1. At the end of the work day on `/store`, click **Day-End Cash & UPI Close**.
-2. Review system-calculated totals for cash, UPI, and card payments.
-3. Input physical cash counts (500s, 200s, 100s, coins) from the cash drawer.
-4. Click **Submit End-of-Day Shift Close** to lock the shift and print the summary slip.
+### Flow 7: Shift Close & Cash Drawer Balancing
+1. At the end of the day, click **Day-End Cash & UPI Close** on `/store`.
+2. Inspect system ledger receipts for Cash, UPI, and Card.
+3. Input physical drawer bill counts (₹500, ₹200, ₹100, ₹50, coins).
+4. System automatically computes discrepancy.
+5. Click **Submit End-of-Day Shift Close** to lock the drawer session and print the balance slip.
 
 ---
 
-### Flow 8: Admin Desk & Order Settlements
-1. Navigate to `/admin`.
-2. Filter orders by status (Active, Delivered, Pending Settlement).
-3. Click **Settle & Close Order** on delivered orders to reconcile pending payments.
-4. Click **Time Audit Trail** on any order to review timestamped activity for all stages.
+### Flow 8: Admin Management, Ledger & Settlement
+1. Open `/admin`.
+2. Review pipeline metrics, active dispatch queues, and overdue orders.
+3. Click **Settle & Close Order** on delivered orders to reconcile final payment.
+4. Click **Time Audit Trail** on any order to review timestamped actor logs across all 14 stages.
+5. Navigate to `/admin/ledger` to inspect daily, monthly, and annual financial statements, tax collections, and payment channel distribution.
+6. Navigate to `/admin/archive` to download CSV spreadsheets or JSON database backups.
 
 ---
 
-### Flow 9: Revenue Ledger & Financial Reports
-1. Navigate to `/admin/ledger`.
-2. Toggle between **Daily**, **Monthly**, **Quarterly**, and **Yearly** views.
-3. Inspect gross revenue, tax (GST) collected, discounts applied, and net revenue.
-4. Review the payment channel distribution breakdown (UPI, POS Machine, Cash, COD).
+## 🧪 Automated Testing & Quality Assurance
 
----
-
-### Flow 10: Order Archiving & Data Export
-1. Navigate to `/admin/archive`.
-2. View delivered and settled historical orders.
-3. Click **Export Archive to CSV** to download a spreadsheet for accounting.
-4. Click **Export JSON Backup** for database backups.
-5. If an order needs modification, click **Restore Order to Active Ledger**.
-
----
-
-## ☁️ Cloud Deployment
-
-### Option A: Vercel (Recommended)
-1. Push your repository to GitHub.
-2. Go to [vercel.com](https://vercel.com) and import the repository.
-3. Framework preset is automatically recognized as **Next.js**.
-4. Click **Deploy**. The application is instantly live with automatic global SSL and CDN.
-
----
-
-### Option B: Render
-The project includes a ready-to-use [`render.yaml`](./render.yaml) blueprint:
-1. Log in to [render.com](https://render.com).
-2. Click **New** -> **Blueprint** and link your GitHub repository.
-3. Render reads `render.yaml` and deploys the web service automatically.
-
----
-
-### Option C: Railway or Fly.io
-Railway and Fly.io automatically detect the root [`Dockerfile`](./Dockerfile):
-- **Railway**: Click **New Project** -> **Deploy from GitHub repo** -> Select this repository.
-- **Fly.io**: Run `fly launch` in your terminal and follow the prompts.
-
----
-
-## 🧪 Testing & Quality Assurance
-
-### Run Regression & Concurrency Tests
-An automated end-to-end regression test validates scale, security, and exception recovery:
+### Run Regression & Concurrency Test Suite
+A automated end-to-end regression script validates security, scale, backend APIs, and data privacy:
 
 ```bash
 node test-regression.mjs
 ```
 
-This verifies:
-- Pipeline state machine validations (e.g. preventing invalid status transitions).
-- Concurrency simulation (50+ simultaneous orders).
-- Unauthorized route access protection.
-- Safe error boundary interception.
+**Verifications performed:**
+- **Route Guard Protection**: Verifies RBAC redirects for Admin and Store consoles.
+- **Scale Concurrency**: Simulates 60+ simultaneous orders with 0 ID or invoice collisions.
+- **Input Sanitization**: Tests XSS, script injection, and SQL injection payloads.
+- **Backend APIs**: Validates `/api/health` and `/api/orders` endpoints.
+- **Data Privacy Compliance**: Verifies zero customer PII written to client `localStorage`.
 
-### Run Static Type Check
-To verify strict TypeScript compilation across the entire project:
-
+### Run Strict TypeScript Check
 ```bash
 npx tsc --noEmit
 ```

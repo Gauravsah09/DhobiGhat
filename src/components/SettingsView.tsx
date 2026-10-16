@@ -74,13 +74,7 @@ export function SettingsView() {
   // Reset to default seed
   const handleResetData = () => {
     if (confirm('Are you sure you want to reset all data back to original seed defaults? Any unsaved orders will be reset.')) {
-      localStorage.setItem('lms_settings_v1', JSON.stringify(initialShopSettings));
-      localStorage.setItem('lms_customers_v1', JSON.stringify(initialCustomers));
-      localStorage.setItem('lms_clothes_v1', JSON.stringify(initialClothTypes));
-      localStorage.setItem('lms_services_v1', JSON.stringify(initialServices));
-      localStorage.setItem('lms_prices_v1', JSON.stringify(initialPriceMatrix));
-      localStorage.setItem('lms_orders_v1', JSON.stringify(initialOrders));
-      localStorage.setItem('lms_expenses_v1', JSON.stringify(initialExpenses));
+      localStorage.clear();
       window.location.reload();
     }
   };

@@ -1,316 +1,417 @@
-# DhobiGhat - Modern Laundry & Dry Cleaning Management System (LMS)
+# DhobiGhat - Modern Laundry & Dry Cleaning Management System
 
 [![Next.js 16](https://img.shields.io/badge/Next.js-16.4-black?style=flat&logo=next.js)](https://nextjs.org/)
 [![React 19](https://img.shields.io/badge/React-19.0-blue?style=flat&logo=react)](https://react.dev/)
 [![TypeScript 5](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=flat&logo=typescript)](https://www.typescriptlang.org/)
 [![Tailwind CSS 4](https://img.shields.io/badge/Tailwind_CSS-v4.0-38B2AC?style=flat&logo=tailwind-css)](https://tailwindcss.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat&logo=docker)](https://www.docker.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-An enterprise-grade, independent, full-stack Laundry & Dry Cleaning Point-of-Sale (POS), Logistics Dispatch, and Enterprise Resource Planning (ERP) platform. Built from the ground up with **Next.js 16 (App Router)**, **React 19**, **TypeScript**, and **Tailwind CSS v4**.
+**DhobiGhat** is an enterprise-grade, full-stack Laundry & Dry Cleaning Point-of-Sale (POS), Logistics Dispatch, and Enterprise Resource Planning (ERP) web application.
 
-Designed with a **local-first, zero-downtime offline architecture** with instant multi-tab `BroadcastChannel` synchronization, full multi-branch support, and optional cloud synchronization with Supabase PostgreSQL.
+Designed for modern laundry chains, dry cleaners, and laundromats, DhobiGhat handles the entire garment journey: online doorstep pickup bookings, driver dispatch, floor garment processing (washing, drying, ironing, QC), POS counter intake, thermal receipt printing, and doorstep delivery with security PIN verification.
+
+The application is **100% self-contained and independent**. It requires zero external databases to get started (works offline out-of-the-box via browser storage) and seamlessly connects to a cloud PostgreSQL database (via Supabase) when configured.
 
 ---
 
 ## 📑 Table of Contents
 
-1. [Key Features & Architectural Highlights](#-key-features--architectural-highlights)
-2. [Portals & Role-Based Access Control](#-portals--role-based-access-control)
-3. [End-to-End Installation](#-end-to-end-installation)
+1. [Technology Stack](#-technology-stack)
+2. [System Architecture & Implementation](#-system-architecture--implementation)
+   - [Dual-Mode Persistence (Local-First + Cloud PostgreSQL)](#dual-mode-persistence)
+   - [Real-Time Cross-Tab Synchronization](#real-time-cross-tab-synchronization)
+   - [14-Stage Logistics Pipeline](#14-stage-logistics-pipeline)
+   - [Project Directory Structure](#project-directory-structure)
+3. [User Roles & Demo Credentials](#-user-roles--demo-credentials)
+4. [Step-by-Step Installation](#-step-by-step-installation)
    - [Prerequisites](#prerequisites)
-   - [Local Development Setup](#1-local-development-setup)
-   - [Production Build & Run](#2-production-build--run)
-   - [Running with Docker Compose](#3-running-with-docker-compose)
-   - [Cloud Database Setup (Supabase)](#4-cloud-database-setup-supabase---optional)
-4. [How to Use This Application (Operational Workflows)](#-how-to-use-this-application)
-   - [Workflow 1: Customer Booking Online Doorstep Pickup](#workflow-1-customer-booking-online-doorstep-pickup)
-   - [Workflow 2: Store Operator Assigning & Reassigning Pickup Riders](#workflow-2-store-operator-assigning--reassigning-pickup-riders)
-   - [Workflow 3: Rider Collection & Store Weigh-In](#workflow-3-rider-collection--store-weigh-in)
-   - [Workflow 4: Floor Garment Processing (Wash, Dry, Iron, QC)](#workflow-4-floor-garment-processing)
-   - [Workflow 5: Doorstep Delivery & Customer Secret PIN Verification](#workflow-5-doorstep-delivery--pin-verification)
-   - [Workflow 6: Walk-in Counter Intake & Thermal POS Receipt](#workflow-6-walk-in-counter-intake--thermal-pos-receipt)
-   - [Workflow 7: Day-End Cash & UPI Settle Close](#workflow-7-day-end-cash--upi-settle-close)
-   - [Workflow 8: HQ Admin Orders Desk (Close & Settle)](#workflow-8-hq-admin-orders-desk)
-   - [Workflow 9: Executive Revenue Ledger Dashboard](#workflow-9-executive-revenue-ledger-dashboard)
-   - [Workflow 10: Order Archive & Historical Export](#workflow-10-order-archive--historical-export)
-5. [Cloud Deployment Guide](#-cloud-deployment-guide)
-   - [Deploying to Vercel (Edge Serverless)](#option-a-vercel-recommended)
-   - [Deploying to Render (Web Service / Docker)](#option-b-render)
-   - [Deploying to Railway or Fly.io](#option-c-railway--flyio)
-6. [Testing & Quality Assurance](#-testing--quality-assurance)
-7. [Project Directory Structure](#-project-directory-structure)
+   - [1. Quick Start (Local Development)](#1-quick-start-local-development)
+   - [2. Production Build](#2-production-build)
+   - [3. Running with Docker Compose](#3-running-with-docker-compose)
+   - [4. Optional: Cloud Database Setup (Supabase)](#4-optional-cloud-database-setup-supabase)
+5. [How to Operate the Application](#-how-to-operate-the-application)
+   - [Flow 1: Customer Booking an Online Pickup](#flow-1-customer-booking-an-online-pickup)
+   - [Flow 2: Store Operator Assigning a Pickup Rider](#flow-2-store-operator-assigning-a-pickup-rider)
+   - [Flow 3: Rider Collection & Store Intake Weigh-In](#flow-3-rider-collection--store-intake-weigh-in)
+   - [Flow 4: Processing Garments on the Shop Floor](#flow-4-processing-garments-on-the-shop-floor)
+   - [Flow 5: Doorstep Delivery & Customer PIN Verification](#flow-5-doorstep-delivery--customer-pin-verification)
+   - [Flow 6: Walk-in POS Intake & Thermal Receipts](#flow-6-walk-in-pos-intake--thermal-receipts)
+   - [Flow 7: Shift Close & Cash Register Reconciliation](#flow-7-shift-close--cash-register-reconciliation)
+   - [Flow 8: Admin Desk & Order Settlements](#flow-8-admin-desk--order-settlements)
+   - [Flow 9: Revenue Ledger & Financial Reports](#flow-9-revenue-ledger--financial-reports)
+   - [Flow 10: Order Archiving & Data Export](#flow-10-order-archiving--data-export)
+6. [Cloud Deployment](#-cloud-deployment)
+7. [Testing & Quality Assurance](#-testing--quality-assurance)
+8. [License](#-license)
 
 ---
 
-## ⚡ Key Features & Architectural Highlights
+## 💻 Technology Stack
 
-- **100% Independent & Self-Contained**: Fully modernized and standalone; does not depend on any legacy PHP, Apache, or MySQL infrastructure.
-- **Local-First Dual-Mode Storage**: Operates seamlessly offline with full data persistence in browser storage, with zero initial operational hosting costs ($0/mo). Instantly connects to PostgreSQL when Supabase cloud credentials are configured.
-- **Real-Time Cross-Tab Synchronization**: Utilizes modern HTML5 `BroadcastChannel` (`dhobighat_order_live_sync`) and storage events so stage updates made by floor operators immediately reflect on rider, counter, and admin screens without page reloads.
-- **14-Stage Interactive Online Logistics Pipeline**: End-to-end milestone tracking covering:
-  1. *Order Receive Queue* → 2. *Pickup Assigned (M/E)* → 3. *Out for Pickup* → 4. *Order Picked-up* → 5. *Reached Store* → 6. *Received* → 7. *Sorting* → 8. *Washing* → 9. *Drying* → 10. *Ironing* → 11. *QC Check & Packed Ready* → 12. *Drop Assigned* → 13. *Out for Delivery* → 14. *Delivered*.
-- **Store Operator Pickup Rider Dispatch**: Store operators can view active queue orders and assign or reassign dedicated pickup riders across Morning and Evening slot windows with instant visual confirmation.
-- **Doorstep Delivery Security PIN**: High-security 4-digit PIN verification to ensure garments are strictly handed over to verified customers. Instant bypass supported when UPI payments are verified by provider callbacks.
-- **Walk-in Counter POS Intake**: Dynamic garment pricing cross-referenced across service matrices (Shirts, Suits, Blankets, Sarees × Dry Cleaning, Steam Press, Premium Wash). POS card terminal integration and UPI Soundbox alert simulation.
-- **Client-Side Thermal & A4 Invoices**: High-DPI 80mm thermal receipt printing and A4 tax invoices with live barcode tagging and store QR lookups without server-side PDF generation dependencies.
-- **Executive Revenue Ledger**: Comprehensive financial analytics breaking down Daily, Monthly, Quarterly, and Yearly revenue, tax, discounts, and payment methods (UPI, POS Machine, Cash, COD).
-- **Completed Orders Archive**: Dedicated archival view to safely store delivered orders, inspect historic logs, restore active orders, or export to CSV and JSON formats.
+| Layer | Technologies | Purpose |
+| :--- | :--- | :--- |
+| **Frontend Framework** | **Next.js 16 (App Router)** | Server & Client Components, Turbopack bundling, file-based routing. |
+| **UI Library** | **React 19** | Concurrent rendering, modern hooks, and component lifecycle management. |
+| **Language** | **TypeScript 5 (Strict Mode)** | Complete static type safety across data models, order pipelines, and events. |
+| **Styling** | **Tailwind CSS v4** | Modern CSS-first utility styling, custom animations, and print media queries. |
+| **Icons & Visuals** | **Lucide React** | Clean, accessible vector icons for all user interactions. |
+| **State Management** | **React Context API** | Unified `LaundryContext` serving reactive orders, catalog, staff, and settings. |
+| **Realtime Sync** | **HTML5 BroadcastChannel API** | Instant cross-tab and cross-window state synchronization without page reloads. |
+| **Data Storage (Default)** | **Browser LocalStorage** | Zero-configuration, zero-cost offline storage with automatic seed data initialization. |
+| **Data Storage (Cloud)** | **PostgreSQL 16 (via Supabase)** | Optional cloud synchronization via `@supabase/supabase-js`. |
+| **Containerization** | **Docker & Alpine Linux** | Standalone multi-stage Docker build (~110MB) for production environments. |
+| **Hardware / POS** | **CSS Print Engine** | High-DPI 80mm thermal receipt printing and A4 tax invoices with barcode rendering. |
 
 ---
 
-## 👥 Portals & Role-Based Access Control
+## 🏗️ System Architecture & Implementation
 
-| Portal | URL Path | Primary Users | Key Capabilities |
-| :--- | :--- | :--- | :--- |
-| **Customer App** | `/customer` | Retail Customers | Online pickup booking, time slot selection, order tracking, address book, garment rate calculator. |
-| **Store Floor Terminal** | `/store` | Store Operators, Managers, Floor Workers | 14-stage pipeline, queue rider assignment, walk-in POS counter, rack Kanban, day-end cash reconciliation. |
-| **Shift Check-in** | `/store/login` | Floor Staff | PIN-based operator shift check-in (Morning / Evening / Night), branch switcher, role credential directory. |
-| **HQ Admin Desk** | `/admin` | Store Admins & Owners | Order desk, payment settlements, order closing, stage audit history, master catalog rates. |
-| **Revenue Ledger** | `/admin/ledger` | Finance & Store Owners | Daily / Monthly / Quarterly / Yearly revenue breakdown, channel analytics, tax & discounts. |
-| **Order Archive** | `/admin/archive` | Compliance & Auditing | Dedicated view for delivered orders, search filters, CSV/JSON export, order restoration. |
-| **Portal Switcher** | `/` or `/portal` | All Personnel | High-level directory to quickly switch between customer, store operator, worker, and admin interfaces. |
+### Dual-Mode Persistence
+DhobiGhat features a **dual-mode persistence engine**:
+- **Offline/Local-First Mode (Default)**: Out-of-the-box, the application saves all orders, customers, services, and transactions directly to browser storage. You can immediately demo, test, or operate the app with zero backend setup.
+- **Cloud Database Mode (Configurable)**: Adding standard Supabase environment variables switches the application to synchronize transactions with a hosted PostgreSQL instance, ensuring multi-device persistence.
 
-### Pre-Configured Operator & Staff Credentials (PIN Authentication)
-| Role | Staff Name | Phone Number | 4-Digit Shift PIN | Primary Responsibilities |
+### Real-Time Cross-Tab Synchronization
+When multiple tabs or windows are open (e.g., an Operator Terminal in one window and an Admin Desk in another), state changes broadcast immediately using the native HTML5 `BroadcastChannel` (`dhobighat_order_live_sync`). 
+- When an operator assigns a rider in the store terminal, the admin and customer tracking screens update in real time without refreshing the browser.
+- A fallback `StorageEvent` listener ensures compatibility across older browser sessions.
+
+### 14-Stage Logistics Pipeline
+Orders progress through a strict, auditable 14-stage pipeline:
+```
+Online Booking
+     │
+     ▼
+[1. Order Receive Queue]
+     │
+     ▼
+[2. Pickup Assigned (M/E)] ──► Store Operator assigns Morning/Evening Rider
+     │
+     ▼
+[3. Out for Pickup]        ──► Rider travels to customer location
+     │
+     ▼
+[4. Order Picked-up]       ──► Bag collected; piece count & weight recorded
+     │
+     ▼
+[5. Reached Store]         ──► Bag arrives at laundry hub
+     │
+     ▼
+[6. Received]              ──► Garments checked in by floor staff
+     │
+     ▼
+[7. Sorting]               ──► Color, fabric, and stain inspection
+     │
+     ▼
+[8. Washing]               ──► Washing cycle initiated
+     │
+     ▼
+[9. Drying]                ──► Hot tumbler drying
+     │
+     ▼
+[10. Ironing]              ──► Steam pressing & finishing
+     │
+     ▼
+[11. QC Check & Packed]    ──► Quality inspection, hanger/poly packaging
+     │
+     ▼
+[12. Drop Assigned]        ──► Delivery rider assigned
+     │
+     ▼
+[13. Out for Delivery]     ──► Driver en route to customer
+     │
+     ▼
+[14. Delivered]            ──► 4-Digit Security PIN verified; handover complete
+```
+
+### Project Directory Structure
+```
+DhobiGhat/
+├── Dockerfile                  # Production multi-stage Alpine Docker container
+├── docker-compose.yml          # Container configuration with health checks
+├── render.yaml                 # 1-Click Render blueprint configuration
+├── supabase-schema.sql         # Optional PostgreSQL 16 schema & seed data
+├── package.json                # Dependencies, scripts, and package metadata
+├── next.config.ts              # Next.js standalone build configuration
+├── tsconfig.json               # Strict TypeScript configuration
+├── test-regression.mjs         # End-to-end regression & concurrency test suite
+├── public/                     # Static brand graphics and logos
+└── src/
+    ├── app/                    # Next.js App Router pages
+    │   ├── page.tsx            # Portal Switcher & Landing Directory
+    │   ├── layout.tsx          # Root HTML layout with context providers
+    │   ├── globals.css         # Theme styles & thermal print media formatting
+    │   ├── customer/           # Customer Portal (Book, Orders, Rates, Account)
+    │   ├── store/              # Store Floor & Operator Terminal
+    │   │   ├── page.tsx        # 14-Stage Pipeline, POS Counter & Cash Settle
+    │   │   └── login/page.tsx  # Shift PIN check-in for floor operators
+    │   ├── admin/              # Executive HQ Admin Desk
+    │   │   ├── page.tsx        # Orders Desk & Audit Trail
+    │   │   ├── ledger/page.tsx # Daily / Monthly / Annual Financial Reports
+    │   │   ├── archive/page.tsx# Completed Orders Archive & CSV/JSON Export
+    │   │   └── login/page.tsx  # Admin access authentication
+    │   └── track/page.tsx      # Public order tracking by invoice number
+    ├── components/             # Reusable UI Components
+    │   ├── ErrorBoundary.tsx   # Global crash interceptor with recovery buttons
+    │   ├── InvoiceModal.tsx    # Thermal receipt (80mm) & A4 invoice generator
+    │   ├── PosCheckoutModal.tsx# Walk-in counter intake modal with payment simulation
+    │   ├── OrdersTable.tsx     # Filterable order ledger table
+    │   ├── CustomersView.tsx   # Customer management & CRM directory
+    │   ├── CatalogView.tsx     # Services and pricing management
+    │   ├── ExpensesView.tsx    # Store overhead expense manager
+    │   └── SettingsView.tsx    # Store settings, backups & cloud guides
+    ├── context/
+    │   └── LaundryContext.tsx  # Core state manager & real-time sync broadcaster
+    ├── lib/
+    │   ├── initial-data.ts     # Pre-populated seed catalog, customers & staff
+    │   ├── supabase.ts         # Dual-mode Supabase PostgreSQL connector
+    │   └── utils.ts            # Currency formatters, date helpers, class mergers
+    └── types/
+        └── index.ts            # Strict TypeScript types for orders, items & roles
+```
+
+---
+
+## 👥 User Roles & Demo Credentials
+
+The application includes pre-configured staff profiles for quick testing and shift sign-in at `/store/login`:
+
+| Role | Staff Name | Phone Number | 4-Digit PIN | Primary Responsibilities |
 | :--- | :--- | :--- | :--- | :--- |
-| **Store Operator** | Ramesh Sharma | `9876543210` | `1234` | Queue rider assignments, walk-in counter POS, cash close. |
-| **Store Manager** | Vikas Patil | `9876543214` | `9999` | Full administrative access to floor pipelines, pricing & POS. |
-| **Floor Worker** | Sunil Gowda | `9876543211` | `2222` | Floor sorting, washing, drying, ironing, and QC packing. |
-| **Logistics Rider** | Mahesh Rider | `9876543216` | `6666` | Out for pickup, doorstep weight verification, delivery. |
-| **Logistics Rider** | Kiran Delivery | `9123456780` | `6667` | Doorstep collection and delivery route dispatch. |
-| **Logistics Rider** | Anand Kumar | `9845011223` | `6668` | Route pickup and evening delivery shifts. |
+| **Store Operator** | Ramesh Sharma | `9876543210` | `1234` | Queue dispatch, rider assignment, walk-in counter POS, shift cash close. |
+| **Store Manager** | Vikas Patil | `9876543214` | `9999` | Full operational control, pipeline management, pricing & drawer audits. |
+| **Floor Worker** | Sunil Gowda | `9876543211` | `2222` | Sorting, washing, drying, ironing, and packaging garments. |
+| **Logistics Rider** | Mahesh Rider | `9876543216` | `6666` | Out-for-pickup, weighing bags, doorstep delivery. |
+| **Logistics Rider** | Kiran Delivery | `9123456780` | `6667` | Doorstep collections and delivery routes. |
+| **Logistics Rider** | Anand Kumar | `9845011223` | `6668` | Evening shift pickups and deliveries. |
 
 ---
 
-## 🛠️ End-to-End Installation
+## 🛠️ Step-by-Step Installation
 
 ### Prerequisites
-- **Node.js**: `v20.x` or `v22.x`+ LTS
-- **npm**: `v10.x` or `v11.x`+
-- **Docker** *(Optional)*: Docker Desktop / Docker Engine for containerized deployment
+- **Node.js**: `v20.x` or `v22.x`+ LTS installed
+- **npm**: `v10.x` or `v11.x`+ installed
+- *(Optional)* **Docker**: If you prefer containerized execution
 
 ---
 
-### 1. Local Development Setup
-
-Clone the repository and install dependencies:
+### 1. Quick Start (Local Development)
 
 ```bash
-# Clone repository
+# 1. Clone the repository
 git clone https://github.com/Gauravsah09/DhobiGhat.git
 cd DhobiGhat
 
-# Install npm dependencies
+# 2. Install dependencies
 npm install
 
-# Start development server
+# 3. Start development server
 npm run dev
 ```
 
-Open **[http://localhost:3000](http://localhost:3000)** in your browser. The application initializes immediately with normalized seed data and local-first persistence.
+Open **`http://localhost:3000`** in your browser. The application will start immediately with pre-loaded demo orders and catalog items.
 
 ---
 
-### 2. Production Build & Run
+### 2. Production Build
 
-To compile an optimized production bundle and start the production server:
+To test the compiled, optimized production bundle locally:
 
 ```bash
-# Compile optimized Next.js production build
+# Build the production bundle
 npm run build
 
-# Start production server on port 3000
+# Start the production server
 npm start
 ```
+
+Access the app at **`http://localhost:3000`**.
 
 ---
 
 ### 3. Running with Docker Compose
 
-The application includes a rootless, multi-stage Alpine Docker container (~110MB) optimized for high concurrency:
+A production-ready `Dockerfile` and `docker-compose.yml` are included:
 
 ```bash
-# Build and run container in background
+# Build and run the container in the background
 docker-compose up -d --build
 
-# Verify container status
-docker ps
-```
-
-The container starts with automatic health checks passing at **[http://localhost:3000](http://localhost:3000)**.
-
-To view live container logs:
-```bash
+# View container logs
 docker-compose logs -f
-```
 
-To stop the container:
-```bash
+# Stop the container
 docker-compose down
 ```
 
+The app will be available at **`http://localhost:3000`**.
+
 ---
 
-### 4. Cloud Database Setup (Supabase) - Optional
+### 4. Optional: Cloud Database Setup (Supabase)
 
-To switch from local-first browser persistence to a cloud-hosted PostgreSQL database:
+If you wish to synchronize data to a hosted PostgreSQL database instead of using local browser storage:
 
-1. Create a free account at [supabase.com](https://supabase.com) and create a project (`dhobighat-pos`).
-2. Navigate to **SQL Editor** -> **New Query**.
-3. Copy the entire contents of [`supabase-schema.sql`](file:///d:/Business/laundry/laundry-app/supabase-schema.sql), paste it into the editor, and click **Run**.
-4. Navigate to **Project Settings** -> **API**, and copy your `Project URL` and `anon public key`.
-5. Create a `.env.local` file in the project root:
+1. Create a free project at [supabase.com](https://supabase.com).
+2. Open the **SQL Editor** in your Supabase dashboard.
+3. Open the file [`supabase-schema.sql`](./supabase-schema.sql) in this repository, copy its contents, paste them into the Supabase SQL editor, and click **Run**.
+4. Go to **Project Settings** -> **API** and copy your **Project URL** and **anon public key**.
+5. Create a `.env.local` file in your project root:
    ```env
    NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
    ```
-6. Restart the application. The system will automatically detect the credentials and synchronize transactions with cloud PostgreSQL.
+6. Restart your application (`npm run dev`). The system will automatically detect the credentials and synchronize with Supabase.
 
 ---
 
-## 📖 How to Use This Application
+## 📖 How to Operate the Application
 
-### Workflow 1: Customer Booking Online Doorstep Pickup
-1. Navigate to `/customer` (or `/customer/book`).
-2. Select your garments (e.g. 3x Shirts, 1x Silk Saree) and choose the service (Dry Cleaning / Wash & Steam Press).
-3. Review the live order summary with GST calculation.
-4. Select your pickup slot date and window (e.g. *Morning 07:00 AM - 10:00 AM* or *Evening 04:00 PM - 07:00 PM*).
-5. Choose payment method:
+### Flow 1: Customer Booking an Online Pickup
+1. Navigate to `/customer` and click **Book Doorstep Pickup** (or go to `/customer/book`).
+2. Add garments to your cart (e.g., 3x Shirts, 1x Silk Saree) and choose the desired service (Dry Cleaning, Premium Wash, or Steam Press).
+3. Select your pickup date and preferred window:
+   - **Morning Window** (07:00 AM - 10:00 AM)
+   - **Evening Window** (04:00 PM - 07:00 PM)
+4. Choose a payment method:
    - **Cash on Delivery (COD)** or **UPI on Delivery**
-   - **Instant Online UPI QR**: Pay instantly to bypass delivery PIN requirement upon provider confirmation.
-6. Click **Place Doorstep Pickup Booking**. Your order is assigned an invoice number (e.g. `#IND-2409`) and a secret 4-digit Delivery PIN.
+   - **Instant Online UPI QR** (bypasses delivery PIN requirement once verified)
+5. Click **Place Doorstep Pickup Booking**.
+6. The booking confirmation displays your **Invoice Number** (e.g. `#IND-2409`) and your secret **4-Digit Delivery PIN**.
 
 ---
 
-### Workflow 2: Store Operator Assigning & Reassigning Pickup Riders
+### Flow 2: Store Operator Assigning a Pickup Rider
 1. Navigate to `/store/login`.
-2. Click the **Store Operator** pill (Ramesh Sharma) or enter phone `9876543210` and PIN `1234` to check in.
-3. On `/store`, stay on the default **Online Orders Pipeline** tab.
-4. Under the **Order Receive Queue** milestone, find the incoming online order.
-5. Click **Assign Pickup Rider (Morning/Evening)**.
-6. In the modal:
-   - Choose a rider from the dropdown (*Mahesh Rider*, *Kiran Delivery*, or *Anand Kumar*).
-   - Choose the pickup slot window (*Morning* or *Evening*).
+2. Click the **Store Operator** button or enter phone `9876543210` with PIN `1234` to check in.
+3. You will be redirected to `/store`. Under the **Online Orders Pipeline** tab, locate the incoming order under **Order Receive Queue**.
+4. Click **Assign Pickup Rider (Morning/Evening)**.
+5. In the modal:
+   - Select a rider (*Mahesh Rider*, *Kiran Delivery*, or *Anand Kumar*).
+   - Select the shift window (*Morning* or *Evening*).
    - Click **Confirm Rider Assignment**.
-7. The order status updates immediately to `pickup_assigned` and appears under the **Pickup Assigned (M/E)** queue with a blue confirmation banner.
-8. **To Reassign a Rider**: Click **Reassign Pickup Rider (<Current Rider>)**, choose a different rider or slot, and confirm. The order updates in-place and notifies all tabs.
+6. The order moves to the **Pickup Assigned (M/E)** queue, and the assigned rider is displayed.
+7. *To reassign*: Click **Reassign Pickup Rider**, choose a different rider or time, and confirm.
 
 ---
 
-### Workflow 3: Rider Collection & Store Weigh-In
-1. Once the rider begins route travel, click **Rider En Route (Out for Pickup)**. The status shifts to `out_for_pickup`.
-2. When the rider collects the bag from the customer, click **Rider Collected Bag (Order Picked-up)**.
-3. Enter the recorded bag piece count and gross weight on the scale (e.g. `3.5 kg`), then confirm.
-4. When the rider brings the garments into the store hub, click **Bag Arrived at Store Floor (Reached Store)**.
+### Flow 3: Rider Collection & Store Intake Weigh-In
+1. When the rider starts the trip, click **Rider En Route (Out for Pickup)**.
+2. When the rider meets the customer, click **Rider Collected Bag (Order Picked-up)**.
+3. Enter the total piece count and gross bag weight from the scale (e.g. `3.5 kg`) and confirm.
+4. When the rider brings the bag to the hub, click **Bag Arrived at Store Floor (Reached Store)**.
 
 ---
 
-### Workflow 4: Floor Garment Processing
-1. Floor staff check garments in at **1. Received** and advance to **2. Sorting**.
-2. Click **Start Washing Cycle (3. Washing)** to allocate garments to commercial washers.
+### Flow 4: Processing Garments on the Shop Floor
+1. At the store floor, advance the order from **1. Received** to **2. Sorting**.
+2. Click **Start Washing Cycle (3. Washing)** when garments enter commercial washers.
 3. Click **Transfer to Hot Tumbler (4. Drying)**.
 4. Click **Transfer to Steam Finishing (5. Ironing)**.
-5. Click **Perform QC Inspection & Pack (6. QC Check & Packed Ready)**. Garments are sealed and tagged for dispatch.
+5. Click **Perform QC Inspection & Pack (6. QC Check & Packed Ready)**. The clothes are sealed in packaging and tagged.
 
 ---
 
-### Workflow 5: Doorstep Delivery & PIN Verification
-1. Click **Assign Drop Rider** to designate the delivery rider.
+### Flow 5: Doorstep Delivery & Customer PIN Verification
+1. Click **Assign Drop Rider** to designate the delivery driver.
 2. Click **Rider Out for Delivery**.
-3. Upon arriving at the customer's doorstep:
-   - **Standard COD Orders**: Rider asks the customer for their secret 4-digit PIN provided on their booking receipt. Once entered, click **Verify PIN & Complete Delivery**.
-   - **Pre-Paid / Verified UPI Orders**: The PIN requirement is automatically waived, enabling 1-click contactless handover.
+3. Upon arriving at the customer's address:
+   - **Standard Orders**: The customer provides their 4-digit PIN. The rider enters the PIN and clicks **Verify PIN & Complete Delivery**.
+   - **Pre-Paid Orders**: The PIN check is automatically waived for contactless delivery.
+4. Order status updates to **Delivered**.
 
 ---
 
-### Workflow 6: Walk-in Counter Intake & Thermal POS Receipt
-1. On `/store`, click the **Walk-in Counter Orders** tab.
-2. Enter the customer's name and 10-digit mobile number.
-3. Select cloth item, service, starch level, and fold style (Hanger / Roll fold).
+### Flow 6: Walk-in POS Intake & Thermal Receipts
+1. On `/store`, switch to the **Walk-in Counter Orders** tab.
+2. Enter customer name and phone number.
+3. Select garment items, service type, and options (starch level, packaging style).
 4. Click **+ Add Item to Intake Ticket**.
-5. Choose payment method:
-   - **Cash (bycash)**: Enter cash received and calculate change.
-   - **Dynamic UPI QR**: Display QR for customer mobile scan with simulated UPI Soundbox announcement.
-   - **POS Machine**: Trigger integrated card swipe/tap authorization.
-6. Click **Print Thermal Intake Receipt & Generate Tag Barcodes**.
+5. Select payment method:
+   - **Cash**: Enter amount tendered to calculate change.
+   - **UPI QR**: Displays a live QR code with simulated audio confirmation.
+   - **Card / POS**: Simulates card swipe authorization.
+6. Click **Print Thermal Intake Receipt & Generate Tag Barcodes** to open the print dialog.
 
 ---
 
-### Workflow 7: Day-End Cash & UPI Settle Close
-1. On `/store`, click **Day-End Cash & UPI Close**.
-2. Review aggregated total cash collections, digital UPI totals, and POS terminal transactions.
-3. Enter physical drawer cash denomination counts.
-4. Click **Submit End-of-Day Shift Close** to lock the register and print the daily reconciliation slip.
+### Flow 7: Shift Close & Cash Register Reconciliation
+1. At the end of the work day on `/store`, click **Day-End Cash & UPI Close**.
+2. Review system-calculated totals for cash, UPI, and card payments.
+3. Input physical cash counts (500s, 200s, 100s, coins) from the cash drawer.
+4. Click **Submit End-of-Day Shift Close** to lock the shift and print the summary slip.
 
 ---
 
-### Workflow 8: HQ Admin Orders Desk
+### Flow 8: Admin Desk & Order Settlements
 1. Navigate to `/admin`.
-2. View all orders across branches with status filters and search.
-3. For delivered orders with pending COD/UPI settlements, click **Settle & Close Order**.
-4. To inspect timestamps and staff accountability for any order, click **Time Audit Trail**.
+2. Filter orders by status (Active, Delivered, Pending Settlement).
+3. Click **Settle & Close Order** on delivered orders to reconcile pending payments.
+4. Click **Time Audit Trail** on any order to review timestamped activity for all stages.
 
 ---
 
-### Workflow 9: Executive Revenue Ledger Dashboard
+### Flow 9: Revenue Ledger & Financial Reports
 1. Navigate to `/admin/ledger`.
 2. Toggle between **Daily**, **Monthly**, **Quarterly**, and **Yearly** views.
-3. Review total gross revenue, tax collected, discounts granted, and net receivables.
-4. Analyze the revenue channel breakdown chart (UPI vs POS Card vs Cash vs COD).
+3. Inspect gross revenue, tax (GST) collected, discounts applied, and net revenue.
+4. Review the payment channel distribution breakdown (UPI, POS Machine, Cash, COD).
 
 ---
 
-### Workflow 10: Order Archive & Historical Export
+### Flow 10: Order Archiving & Data Export
 1. Navigate to `/admin/archive`.
-2. Inspect all completed and settled orders stored in long-term archive.
-3. Filter by date range or customer search.
-4. Export records directly:
-   - Click **Export Archive to CSV** for spreadsheet auditing.
-   - Click **Export JSON Backup** for database archiving.
-5. Need to re-open an archived order? Click **Restore Order to Active Ledger**.
+2. View delivered and settled historical orders.
+3. Click **Export Archive to CSV** to download a spreadsheet for accounting.
+4. Click **Export JSON Backup** for database backups.
+5. If an order needs modification, click **Restore Order to Active Ledger**.
 
 ---
 
-## ☁️ Cloud Deployment Guide
+## ☁️ Cloud Deployment
 
 ### Option A: Vercel (Recommended)
 1. Push your repository to GitHub.
-2. Sign in to [vercel.com](https://vercel.com) and click **Add New...** -> **Project**.
-3. Import the repository `DhobiGhat`.
-4. Framework preset will automatically be set to **Next.js**.
-5. Click **Deploy**. Your app is live with global edge CDN caching and free automated SSL.
+2. Go to [vercel.com](https://vercel.com) and import the repository.
+3. Framework preset is automatically recognized as **Next.js**.
+4. Click **Deploy**. The application is instantly live with automatic global SSL and CDN.
 
 ---
 
 ### Option B: Render
-The repository includes a ready-to-run [`render.yaml`](file:///d:/Business/laundry/laundry-app/render.yaml) blueprint:
+The project includes a ready-to-use [`render.yaml`](./render.yaml) blueprint:
 1. Log in to [render.com](https://render.com).
-2. Click **New** -> **Blueprint**.
-3. Select your repository. Render will automatically read `render.yaml` and provision the web service.
-4. Click **Apply**.
+2. Click **New** -> **Blueprint** and link your GitHub repository.
+3. Render reads `render.yaml` and deploys the web service automatically.
 
 ---
 
-### Option C: Railway / Fly.io
-Railway and Fly.io automatically detect the included root [`Dockerfile`](file:///d:/Business/laundry/laundry-app/Dockerfile):
-- **Railway**: Click **New Project** -> **Deploy from GitHub repo** -> Select `DhobiGhat`.
-- **Fly.io**: Run `fly launch` followed by `fly deploy`.
+### Option C: Railway or Fly.io
+Railway and Fly.io automatically detect the root [`Dockerfile`](./Dockerfile):
+- **Railway**: Click **New Project** -> **Deploy from GitHub repo** -> Select this repository.
+- **Fly.io**: Run `fly launch` in your terminal and follow the prompts.
 
 ---
 
 ## 🧪 Testing & Quality Assurance
 
-### Run Regression Test Suite
-An automated end-to-end regression test suite is included to validate security, concurrency, auth guards, and order lifecycle state transitions:
+### Run Regression & Concurrency Tests
+An automated end-to-end regression test validates scale, security, and exception recovery:
 
 ```bash
-# Run automated regression suite
 node test-regression.mjs
 ```
 
+This verifies:
+- Pipeline state machine validations (e.g. preventing invalid status transitions).
+- Concurrency simulation (50+ simultaneous orders).
+- Unauthorized route access protection.
+- Safe error boundary interception.
+
 ### Run Static Type Check
-To verify 100% strict TypeScript compliance across all components, routes, and models:
+To verify strict TypeScript compilation across the entire project:
 
 ```bash
 npx tsc --noEmit
@@ -318,59 +419,6 @@ npx tsc --noEmit
 
 ---
 
-## 📁 Project Directory Structure
-
-```
-DhobiGhat/
-├── Dockerfile                  # Multi-stage non-root Alpine container
-├── docker-compose.yml          # Local & production Docker Compose configuration
-├── render.yaml                 # 1-click Render blueprint
-├── supabase-schema.sql         # 1-click PostgreSQL 16 schema & seed data
-├── package.json                # Project dependencies and scripts
-├── next.config.ts              # Next.js 16 standalone config & asset optimization
-├── tsconfig.json               # Strict TypeScript configuration
-├── test-regression.mjs         # Concurrency and security regression test suite
-├── public/                     # Static icons, vector assets, and brand graphics
-└── src/
-    ├── app/
-    │   ├── layout.tsx          # Root HTML layout with LaundryProvider & ErrorBoundary
-    │   ├── page.tsx            # Portal switcher and overview landing
-    │   ├── globals.css         # Tailwind v4 theme, animations & thermal receipt CSS
-    │   ├── store/
-    │   │   ├── page.tsx        # Store Floor Control Desk (14-Stage pipeline & POS)
-    │   │   └── login/page.tsx  # Operator 4-digit PIN shift check-in
-    │   ├── admin/
-    │   │   ├── page.tsx        # HQ Admin Orders Desk & Stage Audit
-    │   │   ├── ledger/page.tsx # Daily / Monthly / Quarterly / Yearly Revenue Ledger
-    │   │   ├── archive/page.tsx# Completed Orders Archive & CSV/JSON Export
-    │   │   └── login/page.tsx  # Admin authentication page
-    │   ├── customer/
-    │   │   ├── page.tsx        # Customer app dashboard & active bookings
-    │   │   ├── book/page.tsx   # Garment selection & doorstep pickup scheduling
-    │   │   ├── orders/page.tsx # Order tracking & delivery status
-    │   │   └── rates/page.tsx  # Interactive garment & service rate calculator
-    │   └── track/page.tsx      # Public invoice & phone tracking lookup
-    ├── components/
-    │   ├── ErrorBoundary.tsx   # Global crash handler with safe recovery
-    │   ├── InvoiceModal.tsx    # Print-ready thermal receipt and A4 tax invoice
-    │   ├── PosCheckoutModal.tsx# Fast intake POS modal with payment charge simulation
-    │   ├── OrdersTable.tsx     # Master order ledger table
-    │   ├── CustomersView.tsx   # CRM directory with customer profile editor
-    │   ├── CatalogView.tsx     # Cloth type and service rate matrix management
-    │   ├── ExpensesView.tsx    # Store overhead expense manager
-    │   └── SettingsView.tsx    # Store branding, JSON data backups & cloud guides
-    ├── context/
-    │   └── LaundryContext.tsx  # Central local-first state manager & BroadcastChannel sync
-    ├── lib/
-    │   ├── initial-data.ts     # Initial seed dataset (customers, clothes, services, staff)
-    │   ├── supabase.ts         # Dual-mode Supabase PostgreSQL connector
-    │   └── utils.ts            # Currency formatters, date utilities, class mergers
-    └── types/
-        └── index.ts            # TypeScript definitions (Orders, Stages, RBAC Roles)
-```
-
----
-
 ## 📄 License
 
-This project is licensed under the **MIT License** - see the [LICENSE](file:///d:/Business/laundry/laundry-app/LICENSE) file for details.
+This project is open-source and licensed under the [MIT License](./LICENSE).

@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS expenses (
 );
 
 -- ====================================================================
--- SEED DATA FROM LEGACY laundry.sql
+-- INITIAL SEED DATA
 -- ====================================================================
 
 INSERT INTO shop_settings (shop_name, address, city, phone, email, currency, tax_rate)

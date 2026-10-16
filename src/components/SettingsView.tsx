@@ -297,7 +297,7 @@ export function SettingsView() {
 
             <h3 className="text-lg font-bold tracking-tight mb-1">Serverless Cloud Architecture</h3>
             <p className="text-xs text-slate-300 leading-relaxed mb-6">
-              Modernized from legacy PHP 5/CodeIgniter 3 to a hyper-scalable JAMstack architecture with zero baseline operational cost.
+              DhobiGhat runs on a self-contained, hyper-scalable architecture with local-first offline resilience, real-time sync, and optional Supabase cloud persistence.
             </p>
 
             <div className="space-y-3 pt-2 border-t border-slate-700/60 text-xs">

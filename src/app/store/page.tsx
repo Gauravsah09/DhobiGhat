@@ -246,7 +246,7 @@ export default function StoreFloorApp() {
     { key: 'cancelled', label: 'Cancelled (Optional)', group: 'status' },
   ];
 
-  // Helper to map legacy statuses to current pipeline
+  // Helper to normalize booking and processing statuses to current pipeline stage
   const normalizeStatus = (status: OrderStatus, subStage?: ProcessingSubStage): OrderStatus => {
     if (status === 'booked' || status === 'pending') return 'order_received';
     if (status === 'received_at_store') return 'received';

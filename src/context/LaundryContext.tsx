@@ -26,6 +26,7 @@ import {
   StageTimestampRecord,
   PaymentMethod
 } from '@/types';
+import { hasSqlInjection, hashPassword } from '@/lib/security';
 import {
   initialShopSettings,
   initialBranches,
@@ -45,6 +46,15 @@ import {
 interface CustomerAuthSession {
   user: CustomerUser | null;
   isLoggedIn: boolean;
+  loginWithPassword: (identifier: string, password: string) => { success: boolean; message?: string };
+  signupCustomer: (details: {
+    firstName: string;
+    lastName: string;
+    phone: string;
+    email: string;
+    password: string;
+    address?: Partial<IndianAddress>;
+  }) => { success: boolean; message?: string; user?: CustomerUser };
   loginWithOtp: (phone: string, otp: string) => boolean;
   logout: () => void;
   updateProfile: (details: { firstName: string; lastName: string; email: string }) => void;
@@ -119,7 +129,9 @@ interface LaundryContextType {
     orderId: string, 
     paymentMethod?: PaymentMethod, 
     paymentRef?: string,
-    notes?: string
+    notes?: string,
+    settledAmount?: number,
+    reason?: string
   ) => { success: boolean; message: string };
   archiveOrder: (orderId: string, actorName?: string) => { success: boolean; message: string };
   unarchiveOrder: (orderId: string) => { success: boolean; message: string };
@@ -212,6 +224,26 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem('lms_ind_orders_v6');
       localStorage.removeItem('lms_ind_orders_v5');
       localStorage.removeItem('lms_ind_auth_cust_phone_v3');
+
+      // Hydrate dynamically registered customers (from signup)
+      const regCustomers = localStorage.getItem('dhobighat_registered_customers_v1');
+      if (regCustomers) {
+        try {
+          const parsed = JSON.parse(regCustomers);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setCustomers(parsed);
+          }
+        } catch {}
+      }
+
+      // Check active customer session from sessionStorage
+      const activeCust = sessionStorage.getItem('dhobighat_active_customer');
+      if (activeCust) {
+        try {
+          const parsedCust = JSON.parse(activeCust);
+          if (parsedCust?.phone) setLoggedCustomerPhone(parsedCust.phone);
+        } catch {}
+      }
 
       const sSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
       if (sSettings) setSettings(JSON.parse(sSettings));
@@ -328,84 +360,229 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
   const customerSession: CustomerAuthSession = {
     user: currentCustomerUser,
     isLoggedIn: !!currentCustomerUser,
-    loginWithOtp: (phone: string, otp: string) => {
-      // Simulation: Accept any 4-digit OTP or standard '1234'
-      const cleanPhone = phone.replace(/\D/g, '');
-      let user = customers.find((c) => c.phone.replace(/\D/g, '') === cleanPhone);
-
-      if (!user) {
-        // Create new customer account with phone
-        user = {
-          id: `cust-${Date.now()}`,
-          phone: cleanPhone,
-          firstName: "Valued",
-          lastName: "Customer",
-          email: `${cleanPhone}@dhobighat.in`,
-          addresses: [
-            {
-              id: `addr-${Date.now()}`,
-              label: "Home",
-              flatNo: "Flat 101",
-              society: "Apartment",
-              street: "Main Road",
-              city: "Bengaluru",
-              state: "Karnataka",
-              pincode: "560038",
-              isDefault: true,
-            },
-          ],
-          defaultAddressId: `addr-${Date.now()}`,
-          walletBalance: 100, // Sign up bonus
-          joinDate: new Date().toISOString().split('T')[0],
-          status: 'enable',
-          totalOrders: 0,
-        };
-        setCustomers((prev) => [user!, ...prev]);
+    loginWithPassword: (identifier: string, password: string) => {
+      if (hasSqlInjection(identifier) || hasSqlInjection(password)) {
+        return { success: false, message: 'Invalid input characters detected (SQL Injection protection).' };
       }
 
-      setLoggedCustomerPhone(user.phone);
-      return true;
+      const cleanIdent = identifier.trim().toLowerCase();
+      const cleanPhone = identifier.replace(/\D/g, '');
+
+      const matched = customers.find((c) => {
+        const phoneMatch = cleanPhone.length >= 10 && c.phone.replace(/\D/g, '') === cleanPhone;
+        const emailMatch = c.email && c.email.toLowerCase() === cleanIdent;
+        return phoneMatch || emailMatch;
+      });
+
+      if (!matched) {
+        return { success: false, message: 'No registered customer account found with this mobile or email.' };
+      }
+
+      const hashedInput = hashPassword(password);
+      const isPwdValid = matched.password === password || matched.passwordHash === hashedInput;
+
+      if (!isPwdValid) {
+        return { success: false, message: 'Incorrect password. Please try again.' };
+      }
+
+      setLoggedCustomerPhone(matched.phone);
+      try {
+        sessionStorage.setItem('dhobighat_active_customer', JSON.stringify({ id: matched.id, phone: matched.phone }));
+        if (typeof document !== 'undefined') {
+          document.cookie = `dhobighat_customer_session=${matched.phone}; Path=/; SameSite=Strict;`;
+        }
+      } catch {}
+
+      // Server-side session API sync
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'customer', phone: matched.phone, password }),
+      }).catch(() => {});
+
+      return { success: true, message: 'Signed in successfully!' };
     },
+
+    signupCustomer: (details: {
+      firstName: string;
+      lastName: string;
+      phone: string;
+      email: string;
+      password: string;
+      address?: Partial<IndianAddress>;
+    }) => {
+      if (
+        hasSqlInjection(details.firstName) ||
+        hasSqlInjection(details.lastName) ||
+        hasSqlInjection(details.phone) ||
+        hasSqlInjection(details.email) ||
+        hasSqlInjection(details.password)
+      ) {
+        return { success: false, message: 'Invalid characters detected (SQL Injection protection).' };
+      }
+
+      const cleanPhone = details.phone.replace(/\D/g, '');
+      if (cleanPhone.length !== 10) {
+        return { success: false, message: 'Please enter a valid 10-digit Indian mobile number.' };
+      }
+
+      // Check if phone or email already registered
+      const existing = customers.find(
+        (c) =>
+          c.phone.replace(/\D/g, '') === cleanPhone ||
+          (details.email && c.email && c.email.toLowerCase() === details.email.trim().toLowerCase())
+      );
+      if (existing) {
+        return {
+          success: false,
+          message: 'An account with this mobile number or email already exists. Please sign in.',
+        };
+      }
+
+      const now = new Date().toISOString();
+      const newAddressId = `addr-${Date.now()}`;
+      const defaultAddr: IndianAddress = {
+        id: newAddressId,
+        label: details.address?.label || 'Home',
+        flatNo: details.address?.flatNo || 'Flat/House',
+        society: details.address?.society || '',
+        street: details.address?.street || 'Local Street',
+        city: details.address?.city || 'Bengaluru',
+        state: details.address?.state || 'Karnataka',
+        pincode: details.address?.pincode || '560038',
+        isDefault: true,
+      };
+
+      const newUser: CustomerUser = {
+        id: `cust-${Date.now()}`,
+        phone: cleanPhone,
+        firstName: details.firstName.trim(),
+        lastName: details.lastName.trim(),
+        email: details.email.trim().toLowerCase(),
+        password: details.password,
+        passwordHash: hashPassword(details.password),
+        addresses: [defaultAddr],
+        defaultAddressId: newAddressId,
+        walletBalance: 100, // Welcome credit
+        joinDate: now.split('T')[0],
+        status: 'enable',
+        totalOrders: 0,
+      };
+
+      const updatedCustomers = [newUser, ...customers];
+      setCustomers(updatedCustomers);
+      try {
+        localStorage.setItem('dhobighat_registered_customers_v1', JSON.stringify(updatedCustomers));
+      } catch {}
+
+      setLoggedCustomerPhone(newUser.phone);
+      try {
+        sessionStorage.setItem('dhobighat_active_customer', JSON.stringify({ id: newUser.id, phone: newUser.phone }));
+        if (typeof document !== 'undefined') {
+          document.cookie = `dhobighat_customer_session=${newUser.phone}; Path=/; SameSite=Strict;`;
+        }
+      } catch {}
+
+      // Server-side session API sync
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'customer', phone: newUser.phone, password: details.password }),
+      }).catch(() => {});
+
+      return { success: true, message: 'Account created successfully!', user: newUser };
+    },
+
+    loginWithOtp: (phone: string, otp: string) => {
+      // Legacy fallback: route to loginWithPassword or direct phone
+      const cleanPhone = phone.replace(/\D/g, '');
+      let user = customers.find((c) => c.phone.replace(/\D/g, '') === cleanPhone);
+      if (user) {
+        setLoggedCustomerPhone(user.phone);
+        return true;
+      }
+      return false;
+    },
+
     logout: () => {
+      // Purge active customer session completely
       setLoggedCustomerPhone(null);
+      try {
+        sessionStorage.clear();
+        localStorage.removeItem('dhobighat_active_customer');
+        localStorage.removeItem('lms_ind_auth_cust_phone_v3');
+        localStorage.removeItem('lms_ind_customers_v3');
+        localStorage.removeItem('lms_ind_orders_v6');
+        localStorage.removeItem('lms_ind_orders_v5');
+
+        if (typeof document !== 'undefined') {
+          document.cookie = 'dhobighat_customer_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
+          document.cookie = '__Host-dhobighat_customer_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0; Secure; SameSite=Strict;';
+          document.cookie = 'dhobighat_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
+          document.cookie = '__Host-dhobighat_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0; Secure; SameSite=Strict;';
+        }
+
+        if (typeof window !== 'undefined' && 'caches' in window) {
+          caches.keys().then((names) => {
+            names.forEach((name) => caches.delete(name));
+          }).catch(() => {});
+        }
+
+        fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+      } catch (e) {
+        console.error('Customer logout cleanup error:', e);
+      }
+
+      if (typeof window !== 'undefined') {
+        window.location.href = '/customer/auth';
+      }
     },
+
     updateProfile: ({ firstName, lastName, email }) => {
       if (!currentCustomerUser) return;
-      setCustomers((prev) =>
-        prev.map((c) =>
-          c.id === currentCustomerUser.id ? { ...c, firstName, lastName, email } : c
-        )
+      const updated = customers.map((c) =>
+        c.id === currentCustomerUser.id ? { ...c, firstName, lastName, email } : c
       );
+      setCustomers(updated);
+      try {
+        localStorage.setItem('dhobighat_registered_customers_v1', JSON.stringify(updated));
+      } catch {}
     },
+
     addAddress: (addressData) => {
       const newAddr: IndianAddress = {
         ...addressData,
         id: `addr-${Date.now()}`,
       };
       if (currentCustomerUser) {
-        setCustomers((prev) =>
-          prev.map((c) => {
-            if (c.id === currentCustomerUser.id) {
-              const updatedAddresses = [...c.addresses, newAddr];
-              return {
-                ...c,
-                addresses: updatedAddresses,
-                defaultAddressId: c.defaultAddressId || newAddr.id,
-              };
-            }
-            return c;
-          })
-        );
+        const updated = customers.map((c) => {
+          if (c.id === currentCustomerUser.id) {
+            const updatedAddresses = [...c.addresses, newAddr];
+            return {
+              ...c,
+              addresses: updatedAddresses,
+              defaultAddressId: c.defaultAddressId || newAddr.id,
+            };
+          }
+          return c;
+        });
+        setCustomers(updated);
+        try {
+          localStorage.setItem('dhobighat_registered_customers_v1', JSON.stringify(updated));
+        } catch {}
       }
       return newAddr;
     },
+
     setDefaultAddress: (addressId) => {
       if (!currentCustomerUser) return;
-      setCustomers((prev) =>
-        prev.map((c) =>
-          c.id === currentCustomerUser.id ? { ...c, defaultAddressId: addressId } : c
-        )
+      const updated = customers.map((c) =>
+        c.id === currentCustomerUser.id ? { ...c, defaultAddressId: addressId } : c
       );
+      setCustomers(updated);
+      try {
+        localStorage.setItem('dhobighat_registered_customers_v1', JSON.stringify(updated));
+      } catch {}
     },
   };
 
@@ -1283,7 +1460,9 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     orderId: string,
     paymentMethod?: PaymentMethod,
     paymentRef?: string,
-    notes?: string
+    notes?: string,
+    settledAmount?: number,
+    reason?: string
   ): { success: boolean; message: string } => {
     const targetOrder = orders.find((o) => o.id === orderId);
     if (!targetOrder) {
@@ -1292,36 +1471,45 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
 
     const now = new Date().toISOString();
     const actor = getActorInfo();
-    const resolvedMethod = paymentMethod || targetOrder.paymentMethod || 'cash';
-    const effectiveRef = paymentRef || targetOrder.upiTransactionRef || `SETTLE/ADMIN/${Date.now().toString().slice(-6)}`;
+    const resolvedMethod = paymentMethod || targetOrder.paymentMethod || 'bycash';
+    const effectiveRef = paymentRef || targetOrder.upiTransactionRef || `SETTLE/MANUAL/${Date.now().toString().slice(-6)}`;
+    const effectiveSettledAmt = settledAmount !== undefined ? settledAmount : targetOrder.grandTotal;
 
     const newTimestamps = {
       ...(targetOrder.stageTimestamps || {}),
-      delivered: targetOrder.stageTimestamps?.delivered || now,
+      manual_settlement: now,
       closed: now,
     };
 
     const newHistoryItem: StageTimestampRecord = {
-      stage: 'closed',
-      label: 'Settled & Closed (Admin HQ)',
+      stage: 'manual_settlement',
+      label: 'Manual Settlement (Admin HQ)',
       timestamp: now,
       actorName: actor.name,
       actorRole: 'Admin HQ',
-      notes: notes || `Admin HQ manually settled payment via ${resolvedMethod.toUpperCase().replace(/_/g, ' ')} and closed order. Balance: ₹0.`,
+      notes: notes || `Admin HQ manually settled ₹${effectiveSettledAmt} via ${resolvedMethod.toUpperCase().replace(/_/g, ' ')} and moved to Manual Settlement. Reason: ${reason || 'Admin Settlement'}.`,
     };
 
     const updated = orders.map((o) => {
       if (o.id === orderId) {
         return {
           ...o,
-          status: 'closed' as OrderStatus,
+          status: 'manual_settlement' as OrderStatus,
           paymentStatus: 'paid' as const,
           paymentMethod: resolvedMethod,
-          paidAmount: o.grandTotal,
-          balanceAmount: 0,
+          paidAmount: effectiveSettledAmt,
+          balanceAmount: Math.max(0, o.grandTotal - effectiveSettledAmt),
           settledAt: now,
           settledBy: actor.name,
-          settlementNotes: notes || 'Settled and closed via Central Order Desk',
+          settlementNotes: notes || 'Manually settled and moved to Manual Settlement Stage',
+          manualSettlement: {
+            settledAmount: effectiveSettledAmt,
+            settledBy: actor.name,
+            settledAt: now,
+            notes: notes || 'Admin Manual Settlement',
+            reason: reason || 'Manual Settlement by HQ',
+            mode: resolvedMethod as any,
+          },
           upiTransactionRef: resolvedMethod.includes('upi') ? effectiveRef : o.upiTransactionRef,
           lastStageUpdatedAt: now,
           stageTimestamps: newTimestamps,
@@ -1333,15 +1521,21 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
 
     setOrders(updated);
     broadcastOrders(updated);
+
     fetch(`/api/orders/${orderId}/stage`, {
-      method: 'PATCH',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ targetStatus: 'settled_closed', notes }),
+      body: JSON.stringify({
+        status: 'manual_settlement',
+        actorName: actor.name,
+        actorRole: 'Admin HQ',
+        notes: `Admin manually settled ₹${effectiveSettledAmt} via ${resolvedMethod}`,
+      }),
     }).catch(() => {});
 
     return {
       success: true,
-      message: `Order #${targetOrder.invoiceNo} successfully settled and closed!`,
+      message: `Order #${targetOrder.invoiceNo} successfully settled for ₹${effectiveSettledAmt} and moved to Manual Settlement stage!`,
     };
   };
 

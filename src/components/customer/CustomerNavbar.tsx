@@ -149,7 +149,7 @@ export function CustomerNavbar() {
                 className="px-4 py-2 rounded-xl text-xs font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 transition-all flex items-center gap-1.5"
               >
                 <User className="w-3.5 h-3.5" />
-                <span>Login with OTP</span>
+                <span>Sign In / Register</span>
               </Link>
             )}
 

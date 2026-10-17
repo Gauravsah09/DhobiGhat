@@ -20,6 +20,7 @@ export type OrderStatus =
   | 'drop_assigned'          // Drop Assigned (Rider assigned for delivery)
   | 'out_for_delivery'       // Out for Delivery
   | 'delivered'              // Delivered & verified
+  | 'manual_settlement'      // Manually Closed & Settled by Admin
   | 'closed'                 // Settlement & feedback
   | 'payment_failed'         // Payment Failure
   | 'disputed'               // Dispute Investigation
@@ -78,6 +79,8 @@ export interface CustomerUser {
   firstName: string;
   lastName: string;
   email: string;
+  password?: string;     // Password authentication for customer account
+  passwordHash?: string;
   addresses: IndianAddress[];
   defaultAddressId?: string;
   walletBalance: number;
@@ -247,6 +250,14 @@ export interface Order {
   settlementNotes?: string;
   paidAmount?: number;
   balanceAmount?: number;
+  manualSettlement?: {
+    settledAmount: number;
+    settledBy: string;
+    settledAt: string;
+    notes: string;
+    reason?: string;
+    mode?: 'cash' | 'upi' | 'bank_transfer' | 'waiver';
+  };
 }
 
 export interface Expense {

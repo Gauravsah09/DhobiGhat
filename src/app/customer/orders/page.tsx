@@ -40,10 +40,11 @@ import { CustomerNavbar } from '@/components/customer/CustomerNavbar';
 import { useLaundry } from '@/context/LaundryContext';
 import { Order, OrderStatus } from '@/types';
 import { formatCurrency, formatDateTime, formatTimeShort, generateUpiUri } from '@/lib/utils';
+import { hasSqlInjection, sanitizeInvoiceNo } from '@/lib/security';
 
 function CustomerOrdersContent() {
   const searchParams = useSearchParams();
-  const highlightInv = searchParams.get('inv');
+  const rawHighlightInv = searchParams.get('inv');
 
   const { 
     orders, 
@@ -56,11 +57,12 @@ function CustomerOrdersContent() {
     rescheduleOrder, 
     settings 
   } = useLaundry();
-  const { user } = customerSession;
+  const { user, isLoggedIn } = customerSession;
 
   // Search/Filter state
-  const [filterInv, setFilterInv] = useState(highlightInv || '');
+  const [filterInv, setFilterInv] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [accessDeniedMessage, setAccessDeniedMessage] = useState<string | null>(null);
 
   // Photo evidence preview modal state
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
@@ -69,14 +71,6 @@ function CustomerOrdersContent() {
   const [showUpiPayModal, setShowUpiPayModal] = useState(false);
   const [upiPayCopied, setUpiPayCopied] = useState(false);
   const [upiSimulating, setUpiSimulating] = useState(false);
-
-  // Audit Trail collapse/expand state
-  const [showAuditTrail, setShowAuditTrail] = useState(true);
-
-  // Guest Order Lookup state (if customer is unauthenticated)
-  const [lookupInv, setLookupInv] = useState('');
-  const [lookupPhone, setLookupPhone] = useState('');
-  const [lookupError, setLookupError] = useState('');
 
   // Dispute modal state
   const [showDisputeModal, setShowDisputeModal] = useState(false);
@@ -97,11 +91,9 @@ function CustomerOrdersContent() {
   const [userRating, setUserRating] = useState(5);
   const [feedbackText, setFeedbackText] = useState('');
 
-  // Filter orders strictly: only authenticated customer orders or explicit verified order
-  const userOrders = user
-    ? orders.filter((o) => o.customerId === user.id || o.customerPhone === user.phone)
-    : selectedOrderId
-    ? orders.filter((o) => o.id === selectedOrderId)
+  // Filter orders strictly: only authenticated customer orders. Zero leaks for unauthenticated visitors!
+  const userOrders = (user && isLoggedIn)
+    ? orders.filter((o) => o.customerId === user.id || (user.phone && (o.customerPhone || '').replace(/\D/g, '').endsWith(user.phone.replace(/\D/g, ''))))
     : [];
 
   // Helper to extract recorded timestamp for each milestone step
@@ -151,36 +143,33 @@ function CustomerOrdersContent() {
     return order.stageTimestamps[stepKey] || null;
   };
 
-  const handleGuestLookup = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLookupError('');
-    const cleanPhone = lookupPhone.replace(/\D/g, '');
-    const cleanInv = lookupInv.trim().toLowerCase();
-    const matched = orders.find(
-      (o) =>
-        (o.invoiceNo || '').toLowerCase() === cleanInv &&
-        (cleanPhone.length >= 4 ? (o.customerPhone || '').replace(/\D/g, '').endsWith(cleanPhone) : true)
-    );
-    if (matched) {
-      setSelectedOrderId(matched.id);
-    } else {
-      setLookupError('No order found matching this invoice number and mobile number.');
-    }
-  };
-
-  // Pick highlighted order or first active
+  // Pick highlighted order or first active, STRICTLY verifying ownership
   useEffect(() => {
-    if (highlightInv) {
-      const found = orders.find(
-        (o) => (o.invoiceNo || '').toLowerCase() === highlightInv.toLowerCase()
+    if (!isLoggedIn || !user) return;
+
+    if (rawHighlightInv) {
+      if (hasSqlInjection(rawHighlightInv)) {
+        setAccessDeniedMessage('Invalid characters detected in invoice parameter.');
+        return;
+      }
+      const cleanInv = sanitizeInvoiceNo(rawHighlightInv);
+      const found = userOrders.find(
+        (o) => (o.invoiceNo || '').toLowerCase() === cleanInv.toLowerCase()
       );
-      if (found) setSelectedOrderId(found.id);
+      if (found) {
+        setSelectedOrderId(found.id);
+        setAccessDeniedMessage(null);
+      } else {
+        setAccessDeniedMessage(`Invoice #${cleanInv} was not found or is not associated with your account.`);
+        if (userOrders.length > 0 && !selectedOrderId) setSelectedOrderId(userOrders[0].id);
+      }
     } else if (userOrders.length > 0 && !selectedOrderId) {
       setSelectedOrderId(userOrders[0].id);
     }
-  }, [highlightInv, orders, userOrders.length, selectedOrderId]);
+  }, [rawHighlightInv, userOrders, user, isLoggedIn, selectedOrderId]);
 
-  const selectedOrder = (selectedOrderId ? orders.find((o) => o.id === selectedOrderId) : null) || userOrders[0] || null;
+  // Selected order MUST be an order belonging to the current user!
+  const selectedOrder = (selectedOrderId ? userOrders.find((o) => o.id === selectedOrderId) : null) || userOrders[0] || null;
 
   // Order Lifecycle 9 Steps for Customer App (including Drop Assigned)
   const lifecycleSteps: { key: OrderStatus; label: string; desc: string }[] = [
@@ -284,102 +273,50 @@ function CustomerOrdersContent() {
     alert('Thank you for rating DhobiGhat India!');
   };
 
-  // If unauthenticated and no verified order selected, show gate screen
-  if (!user && !selectedOrder) {
+  // STRICT AUTHENTICATION GATE: Never expose orders or invoices to unauthenticated visitors
+  if (!user || !isLoggedIn) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
         <CustomerNavbar />
 
-        <main className="flex-1 max-w-lg w-full mx-auto px-4 py-12 flex flex-col justify-center">
+        <main className="flex-1 max-w-lg w-full mx-auto px-4 py-16 flex flex-col justify-center">
           <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-xl space-y-6">
-            <div className="text-center space-y-2">
+            <div className="text-center space-y-3">
               <div className="w-14 h-14 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center mx-auto border border-sky-100 shadow-sm">
-                <ShoppingBag className="w-7 h-7" />
+                <ShieldAlert className="w-7 h-7 text-sky-600" />
               </div>
-              <span className="inline-block text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-sky-100 text-sky-800">
-                Customer Verification Required
+              <span className="inline-block text-[10px] font-extrabold uppercase px-3 py-1 rounded-full bg-sky-100 text-sky-800 tracking-wider">
+                Authentication Required
               </span>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Order Tracking & History</h1>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Direct access to customer orders is restricted. Please sign in with your mobile OTP or verify with your invoice number.
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Protected Order Access</h1>
+              <p className="text-xs text-slate-500 leading-relaxed max-w-sm mx-auto">
+                Direct access to customer invoices and data via public link is restricted. Please sign in with your customer account password to view your active bookings and order tracking.
               </p>
             </div>
 
-            {/* Option 1: Mobile OTP Login */}
-            <div className="p-4 rounded-2xl bg-sky-50/60 border border-sky-100 space-y-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-sky-900">
-                <Sparkles className="w-4 h-4 text-sky-600" />
-                <span>Option 1: Sign In with Mobile OTP</span>
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Zero Data Exposure Guarantee</span>
               </div>
-              <p className="text-[11px] text-slate-600">
-                View all your active bookings, past invoices, live rider tracking, and loyalty rewards.
+              <p className="text-[11px] text-slate-500 leading-normal">
+                Your invoices, clothes list, delivery addresses, and handover PINs are strictly private and accessible only when signed in to your account.
               </p>
+            </div>
+
+            <div className="space-y-3">
               <Link
                 href="/customer/auth?redirect=/customer/orders"
-                className="w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-extrabold text-xs shadow-md shadow-sky-600/20 text-center flex items-center justify-center gap-1.5 transition-all"
+                className="w-full py-3 rounded-2xl bg-sky-600 hover:bg-sky-500 text-white font-black text-xs shadow-lg shadow-sky-600/25 text-center flex items-center justify-center gap-2 transition-all cursor-pointer"
               >
-                <span>Login with 10-Digit Mobile OTP</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <span>Sign In with Password / Register</span>
+                <ArrowRight className="w-4 h-4" />
               </Link>
-            </div>
 
-            <div className="relative flex py-1 items-center">
-              <div className="flex-grow border-t border-slate-200" />
-              <span className="flex-shrink mx-3 text-slate-400 text-[11px] font-bold uppercase">or</span>
-              <div className="flex-grow border-t border-slate-200" />
-            </div>
-
-            {/* Option 2: Specific Invoice Tracking */}
-            <form onSubmit={handleGuestLookup} className="space-y-3">
-              <div className="text-xs font-bold text-slate-800">
-                Option 2: Track Specific Order
-              </div>
-
-              {lookupError && (
-                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <span>{lookupError}</span>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Invoice Number
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. IND-2401"
-                  value={lookupInv}
-                  onChange={(e) => setLookupInv(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Registered Mobile Number
-                </label>
-                <input
-                  type="tel"
-                  placeholder="e.g. 9876543210"
-                  value={lookupPhone}
-                  onChange={(e) => setLookupPhone(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow transition-all"
+              <Link
+                href="/customer"
+                className="block text-center text-xs font-bold text-slate-500 hover:text-slate-800 py-1 transition-colors"
               >
-                Verify & Track Order ➔
-              </button>
-            </form>
-
-            <div className="text-center pt-2">
-              <Link href="/customer" className="text-xs font-bold text-slate-500 hover:text-slate-800">
                 ← Return to Customer Home
               </Link>
             </div>
@@ -414,16 +351,52 @@ function CustomerOrdersContent() {
           </Link>
         </div>
 
-        {/* Layout: Left Sidebar Orders List, Right Selected Order Lifecycle Details */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {accessDeniedMessage && (
+          <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+              <span className="font-semibold">{accessDeniedMessage}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAccessDeniedMessage(null)}
+              className="text-xs font-bold text-amber-900 hover:text-amber-700 px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
-          {/* Left Column: Orders Selector */}
-          <div className="space-y-4">
-            <h3 className="font-bold text-xs uppercase tracking-wider text-slate-500">
-              Your Orders ({userOrders.length})
-            </h3>
+        {userOrders.length === 0 ? (
+          <div className="bg-white rounded-3xl p-12 border border-slate-200 text-center space-y-4 max-w-xl mx-auto shadow-sm">
+            <div className="w-16 h-16 rounded-3xl bg-sky-50 text-sky-600 flex items-center justify-center mx-auto border border-sky-100">
+              <ShoppingBag className="w-8 h-8" />
+            </div>
+            <h2 className="text-xl font-black text-slate-900">No Orders Placed Yet</h2>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+              You haven&apos;t placed any laundry bookings with this account yet. Experience our premium doorstep pickup and eco-friendly care today.
+            </p>
+            <div className="pt-2">
+              <Link
+                href="/customer/book"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-sky-600 hover:bg-sky-500 text-white font-black text-xs shadow-lg shadow-sky-600/25 transition-all"
+              >
+                <span>Book Your First Laundry Pickup</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+        ) : (
+          /* Layout: Left Sidebar Orders List, Right Selected Order Lifecycle Details */
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-            <div className="space-y-3">
+            {/* Left Column: Orders Selector */}
+            <div className="space-y-4">
+              <h3 className="font-bold text-xs uppercase tracking-wider text-slate-500">
+                Your Orders ({userOrders.length})
+              </h3>
+
+              <div className="space-y-3">
               {userOrders.map((ord) => (
                 <div
                   key={ord.id}
@@ -809,77 +782,6 @@ function CustomerOrdersContent() {
                 )}
               </div>
 
-              {/* Comprehensive Date & Time Audit Trail & Event Timeline */}
-              <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/80 shadow-xs space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100 shadow-xs">
-                      <History className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h3 className="font-black text-sm text-slate-900 tracking-tight flex items-center gap-2">
-                        <span>Date & Time Stage Tracking History</span>
-                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">
-                          {selectedOrder.stageHistory?.length || 1} Events Logged
-                        </span>
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        Exact time records of each transition, processing milestone, and handlers
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowAuditTrail(!showAuditTrail)}
-                    className="text-xs font-bold text-sky-700 hover:text-sky-800 flex items-center gap-1 px-3 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-100 transition-colors"
-                  >
-                    <span>{showAuditTrail ? 'Hide Log' : 'View Full Log'}</span>
-                    {showAuditTrail ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-
-                {showAuditTrail && (
-                  <div className="space-y-3 pt-1">
-                    {selectedOrder.stageHistory && selectedOrder.stageHistory.length > 0 ? (
-                      <div className="relative pl-6 space-y-3 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
-                        {selectedOrder.stageHistory.map((item, hIdx) => (
-                          <div key={hIdx} className="relative group">
-                            <div className="absolute -left-6 top-2 w-3.5 h-3.5 rounded-full bg-sky-500 ring-4 ring-sky-100 border-2 border-white" />
-                            <div className="bg-slate-50/90 hover:bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 transition-all space-y-1">
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs font-black text-slate-900">
-                                    {item.label || item.stage.replace(/_/g, ' ')}
-                                  </span>
-                                  {item.actorRole && (
-                                    <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">
-                                      {item.actorRole}
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="text-xs font-mono font-bold text-sky-700 flex items-center gap-1.5">
-                                  <Clock className="w-3 h-3 text-sky-500" />
-                                  <span>{formatDateTime(item.timestamp)}</span>
-                                </span>
-                              </div>
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-500 gap-1">
-                                <span>Handled By: <strong className="text-slate-700 font-semibold">{item.actorName || 'DhobiGhat Operations Team'}</strong></span>
-                                {item.notes && <span className="text-[11px] text-slate-600 italic bg-white/70 px-2 py-0.5 rounded border border-slate-200/50">{item.notes}</span>}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
-                        <span>Order Received: {formatDateTime(selectedOrder.orderDate)}</span>
-                        <span className="font-mono text-slate-500">Last Stage Update: {formatDateTime(selectedOrder.lastStageUpdatedAt || selectedOrder.orderDate)}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
               {/* Rider Handover Card (if rider collected) */}
               {selectedOrder.riderHandover && (
                 <div className="bg-slate-900 text-white rounded-3xl p-6 shadow-md space-y-4">
@@ -1078,8 +980,8 @@ function CustomerOrdersContent() {
               No orders found. Click &ldquo;Book Pickup&rdquo; to place your first order.
             </div>
           )}
-
-        </div>
+          </div>
+        )}
 
         {/* Dispute Modal */}
         {showDisputeModal && selectedOrder && (

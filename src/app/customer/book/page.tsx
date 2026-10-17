@@ -106,17 +106,17 @@ function CustomerBookingContent() {
 
   // Address states
   const defaultAddr = user?.addresses.find((a) => a.id === user.defaultAddressId) || user?.addresses[0];
-  const [flatNo, setFlatNo] = useState(defaultAddr?.flatNo || 'Flat 402, Block B');
-  const [society, setSociety] = useState(defaultAddr?.society || 'Prestige Ozone');
-  const [street, setStreet] = useState(defaultAddr?.street || '12th Main, HAL 2nd Stage, Indiranagar');
-  const [landmark, setLandmark] = useState(defaultAddr?.landmark || 'Near Sony Signal');
+  const [flatNo, setFlatNo] = useState(defaultAddr?.flatNo || '');
+  const [society, setSociety] = useState(defaultAddr?.society || '');
+  const [street, setStreet] = useState(defaultAddr?.street || '');
+  const [landmark, setLandmark] = useState(defaultAddr?.landmark || '');
   const [city, setCity] = useState(defaultAddr?.city || 'Bengaluru');
   const [state, setState] = useState(defaultAddr?.state || 'Karnataka');
-  const [pincode, setPincode] = useState(defaultAddr?.pincode || '560038');
+  const [pincode, setPincode] = useState(defaultAddr?.pincode || '');
 
   // Customer contact
-  const [custName, setCustName] = useState(user ? `${user.firstName} ${user.lastName}` : 'Arun Rao');
-  const [custPhone, setCustPhone] = useState(user ? user.phone : '9876543210');
+  const [custName, setCustName] = useState(user ? `${user.firstName} ${user.lastName}`.trim() : '');
+  const [custPhone, setCustPhone] = useState(user ? user.phone : '');
 
   // Payment method (Defaults to COD Cash, user can switch to COD UPI or Instant UPI QR)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>('cod_cash');
@@ -154,13 +154,13 @@ function CustomerBookingContent() {
       setCustName(`${user.firstName} ${user.lastName}`.trim());
       setCustPhone(user.phone);
       if (defaultAddr) {
-        setFlatNo(defaultAddr.flatNo || 'Flat 402, Block B');
-        setSociety(defaultAddr.society || 'Prestige Ozone Apartments');
-        setStreet(defaultAddr.street || '12th Main, HAL 2nd Stage, Indiranagar');
-        setLandmark(defaultAddr.landmark || 'Near Sony Signal');
+        setFlatNo(defaultAddr.flatNo || '');
+        setSociety(defaultAddr.society || '');
+        setStreet(defaultAddr.street || '');
+        setLandmark(defaultAddr.landmark || '');
         setCity(defaultAddr.city || 'Bengaluru');
         setState(defaultAddr.state || 'Karnataka');
-        setPincode(defaultAddr.pincode || '560038');
+        setPincode(defaultAddr.pincode || '');
       }
     }
   }, [user, defaultAddr]);

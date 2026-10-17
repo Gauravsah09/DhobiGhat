@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { signSessionToken, SESSION_COOKIE_NAME } from '@/lib/auth-server';
 import { initialStaff, initialCustomers } from '@/lib/initial-data';
+import { hasSqlInjection, sanitizePhoneNumber } from '@/lib/security';
 
 // Helper to calculate SHA-256 hash using native Web Crypto API
 async function sha256(message: string): Promise<string> {
@@ -13,10 +14,26 @@ async function sha256(message: string): Promise<string> {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { type, phone, pin, otp } = body;
+    const { type, phone, pin, otp, password, email, firstName, lastName } = body;
 
-    if (!phone) {
-      return NextResponse.json({ success: false, message: 'Phone number is required' }, { status: 400 });
+    // Strict SQL Injection Prevention on all auth fields
+    if (
+      (phone && hasSqlInjection(String(phone))) ||
+      (pin && hasSqlInjection(String(pin))) ||
+      (password && hasSqlInjection(String(password))) ||
+      (email && hasSqlInjection(String(email))) ||
+      (type && hasSqlInjection(String(type))) ||
+      (firstName && hasSqlInjection(String(firstName))) ||
+      (lastName && hasSqlInjection(String(lastName)))
+    ) {
+      return NextResponse.json(
+        { success: false, message: 'Invalid characters detected (SQL Injection protection).' },
+        { status: 400 }
+      );
+    }
+
+    if (!phone && !email) {
+      return NextResponse.json({ success: false, message: 'Phone number or email is required' }, { status: 400 });
     }
 
     if (type === 'staff') {
@@ -71,30 +88,34 @@ export async function POST(req: NextRequest) {
       return response;
     }
 
-    // Customer Login (OTP-based)
+    // Customer Login & Account Session (Password-based)
     if (type === 'customer') {
-      const customer = initialCustomers.find((c) => c.phone === phone) || {
-        id: `cust-${Date.now()}`,
-        phone,
-        firstName: 'Guest',
-        lastName: 'Customer',
-        email: `${phone}@guest.dhobighat.com`,
+      const cleanPhone = phone ? sanitizePhoneNumber(phone) : '';
+      const cleanEmail = email ? String(email).trim().toLowerCase() : '';
+
+      const customer = {
+        id: body.id || `cust-${Date.now()}`,
+        phone: cleanPhone || '9876543210',
+        firstName: firstName || body.name || 'Valued',
+        lastName: lastName || 'Customer',
+        email: cleanEmail || `${cleanPhone}@dhobighat.in`,
       };
 
       const sessionToken = await signSessionToken({
         userId: customer.id,
         role: 'customer',
         phone: customer.phone,
-        fullName: `${customer.firstName} ${customer.lastName}`,
+        fullName: `${customer.firstName} ${customer.lastName}`.trim(),
       });
 
       const response = NextResponse.json({
         success: true,
         user: {
           id: customer.id,
-          name: `${customer.firstName} ${customer.lastName}`,
+          name: `${customer.firstName} ${customer.lastName}`.trim(),
           role: 'customer',
           phone: customer.phone,
+          email: customer.email,
         },
       });
 

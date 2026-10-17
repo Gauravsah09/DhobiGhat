@@ -1,23 +1,28 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
   Phone, 
-  KeyRound, 
+  Lock, 
   User, 
   Mail, 
   ArrowRight, 
   ShieldCheck, 
   CheckCircle2, 
   AlertCircle,
-  RefreshCw,
   LogOut,
-  Shirt
+  Shirt,
+  Eye,
+  EyeOff,
+  ShoppingBag,
+  Sparkles,
+  Check
 } from 'lucide-react';
 import { CustomerNavbar } from '@/components/customer/CustomerNavbar';
 import { useLaundry } from '@/context/LaundryContext';
+import { hasSqlInjection, sanitizePhoneNumber } from '@/lib/security';
 
 function CustomerAuthContent() {
   const router = useRouter();
@@ -25,73 +30,143 @@ function CustomerAuthContent() {
   const redirectUrl = searchParams.get('redirect') || '/customer';
 
   const { customerSession } = useLaundry();
-  const { user, isLoggedIn, loginWithOtp, logout, updateProfile } = customerSession;
+  const { user, isLoggedIn, loginWithPassword, signupCustomer, logout } = customerSession;
 
-  // Form states
-  const [phone, setPhone] = useState('9876543210');
-  const [step, setStep] = useState<'phone' | 'otp' | 'profile'>('phone');
-  const [otp, setOtp] = useState('');
-  const [countdown, setCountdown] = useState(30);
+  // Active tab: 'login' | 'signup'
+  const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
+
+  // Login Form state
+  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+
+  // Signup Form state
+  const [signupFirstName, setSignupFirstName] = useState('');
+  const [signupLastName, setSignupLastName] = useState('');
+  const [signupPhone, setSignupPhone] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(true);
+
+  // Alert & loading states
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Profile onboarding state
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-
-  // Countdown timer for OTP resend
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (step === 'otp' && countdown > 0) {
-      timer = setTimeout(() => setCountdown((c) => c - 1), 1000);
-    }
-    return () => clearTimeout(timer);
-  }, [step, countdown]);
-
-  const handleSendOtp = (e: React.FormEvent) => {
+  // Handle Login submission
+  const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = phone.replace(/\D/g, '');
-    if (clean.length < 10) {
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    if (!loginIdentifier.trim()) {
+      setErrorMsg('Please enter your registered mobile number or email.');
+      return;
+    }
+    if (!loginPassword) {
+      setErrorMsg('Please enter your password.');
+      return;
+    }
+
+    // SQL Injection check
+    if (hasSqlInjection(loginIdentifier) || hasSqlInjection(loginPassword)) {
+      setErrorMsg('Invalid characters detected (SQL Injection protection).');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = loginWithPassword(loginIdentifier, loginPassword);
+      if (res.success) {
+        setSuccessMsg('Signed in successfully! Redirecting...');
+        setTimeout(() => {
+          router.push(redirectUrl);
+        }, 600);
+      } else {
+        setErrorMsg(res.message || 'Invalid mobile number/email or password.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Login failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle Signup submission
+  const handleSignupSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    // Validation
+    if (!signupFirstName.trim()) {
+      setErrorMsg('First name is required.');
+      return;
+    }
+
+    const cleanPhone = signupPhone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
       setErrorMsg('Please enter a valid 10-digit Indian mobile number.');
       return;
     }
-    setErrorMsg('');
-    setStep('otp');
-    setCountdown(30);
-  };
 
-  const handleVerifyOtp = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (otp.length < 4) {
-      setErrorMsg('Please enter the 4-digit verification code.');
+    if (!signupEmail.trim() || !signupEmail.includes('@')) {
+      setErrorMsg('Please enter a valid email address for your GST invoices.');
       return;
     }
 
-    const success = loginWithOtp(phone, otp);
-    if (success) {
-      // Check if user has real name
-      if (user && user.firstName !== 'Valued') {
-        router.push(redirectUrl);
+    if (signupPassword.length < 6) {
+      setErrorMsg('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (signupPassword !== signupConfirmPassword) {
+      setErrorMsg('Passwords do not match. Please verify your password.');
+      return;
+    }
+
+    if (!agreeTerms) {
+      setErrorMsg('Please agree to the Terms of Service to create your account.');
+      return;
+    }
+
+    // SQL injection checks
+    if (
+      hasSqlInjection(signupFirstName) ||
+      hasSqlInjection(signupLastName) ||
+      hasSqlInjection(signupPhone) ||
+      hasSqlInjection(signupEmail) ||
+      hasSqlInjection(signupPassword)
+    ) {
+      setErrorMsg('Invalid characters detected (SQL Injection protection).');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = signupCustomer({
+        firstName: signupFirstName.trim(),
+        lastName: signupLastName.trim() || '-',
+        phone: cleanPhone,
+        email: signupEmail.trim(),
+        password: signupPassword,
+      });
+
+      if (res.success) {
+        setSuccessMsg('Account created successfully with ₹100 Welcome Credit! Redirecting...');
+        setTimeout(() => {
+          router.push(redirectUrl);
+        }, 800);
       } else {
-        setStep('profile');
+        setErrorMsg(res.message || 'Could not create account. Please try again.');
       }
-    } else {
-      setErrorMsg('Invalid OTP. Please try again.');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Signup failed. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
-  };
-
-  const handleSaveProfile = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!firstName.trim()) {
-      setErrorMsg('Name is required.');
-      return;
-    }
-    updateProfile({
-      firstName: firstName.trim(),
-      lastName: lastName.trim() || '-',
-      email: email.trim() || `${phone}@customer.dhobighat.in`,
-    });
-    router.push(redirectUrl);
   };
 
   return (
@@ -108,228 +183,335 @@ function CustomerAuthContent() {
               <Shirt className="w-6 h-6 stroke-[2.5]" />
             </div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-              {isLoggedIn ? 'Your DhobiGhat Account' : 'Login / Create Account'}
+              {isLoggedIn ? 'Your DhobiGhat Account' : 'Customer Account Access'}
             </h1>
             <p className="text-xs text-slate-500 max-w-xs mx-auto">
               {isLoggedIn
                 ? `Logged in as +91 ${user?.phone}`
-                : 'Enter your 10-digit mobile number for instant OTP verification.'}
+                : 'Sign in to your account or create a new profile with password security.'}
             </p>
           </div>
 
+          {/* Error & Success Alerts */}
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{errorMsg}</span>
+              <span className="font-medium">{errorMsg}</span>
+            </div>
+          )}
+
+          {successMsg && (
+            <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2.5">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span className="font-medium">{successMsg}</span>
             </div>
           )}
 
           {/* Already logged in view */}
           {isLoggedIn && user ? (
-            <div className="space-y-4">
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2 text-xs">
-                <div className="flex justify-between border-b border-slate-200/60 pb-2">
-                  <span className="text-slate-400">Customer Name</span>
-                  <span className="font-bold text-slate-900">{user.firstName} {user.lastName}</span>
+            <div className="space-y-5">
+              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3 text-xs">
+                <div className="flex justify-between items-center border-b border-slate-200/60 pb-2.5">
+                  <span className="text-slate-500 font-medium">Customer Name</span>
+                  <span className="font-bold text-slate-900 text-sm">{user.firstName} {user.lastName}</span>
                 </div>
-                <div className="flex justify-between border-b border-slate-200/60 pb-2">
-                  <span className="text-slate-400">Mobile Number</span>
+                <div className="flex justify-between items-center border-b border-slate-200/60 pb-2.5">
+                  <span className="text-slate-500 font-medium">Registered Mobile</span>
                   <span className="font-mono font-bold text-slate-900">+91 {user.phone}</span>
                 </div>
-                <div className="flex justify-between border-b border-slate-200/60 pb-2">
-                  <span className="text-slate-400">Email Address</span>
-                  <span className="text-slate-700">{user.email}</span>
+                <div className="flex justify-between items-center border-b border-slate-200/60 pb-2.5">
+                  <span className="text-slate-500 font-medium">Email for Invoices</span>
+                  <span className="text-slate-800 font-medium">{user.email}</span>
                 </div>
-                <div className="flex justify-between pt-1">
-                  <span className="text-slate-400">Wallet Cashback</span>
-                  <span className="font-black text-emerald-600 text-sm">₹{user.walletBalance}</span>
+                <div className="flex justify-between items-center pt-1">
+                  <span className="text-slate-500 font-medium">Wallet Cashback Balance</span>
+                  <span className="font-black text-emerald-600 text-base">₹{user.walletBalance || 0}</span>
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <Link
+                  href="/customer/orders"
+                  className="py-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs text-center shadow-md shadow-sky-600/20 flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                  <span>View My Orders</span>
+                </Link>
                 <Link
                   href="/customer/book"
-                  className="flex-1 py-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs text-center shadow-md shadow-sky-600/20"
+                  className="py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs text-center shadow-md flex items-center justify-center gap-1.5 transition-all"
                 >
-                  Book New Pickup
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Book Pickup</span>
                 </Link>
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="px-5 py-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors border border-rose-200/60"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Logout</span>
-                </button>
-              </div>
-            </div>
-          ) : step === 'phone' ? (
-            /* Step 1: Mobile Phone Input */
-            <form onSubmit={handleSendOtp} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                  Mobile Phone Number
-                </label>
-                <div className="relative">
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1 text-slate-500 text-sm font-semibold border-r border-slate-200 pr-2">
-                    <span>🇮🇳</span>
-                    <span>+91</span>
-                  </div>
-                  <input
-                    type="tel"
-                    required
-                    maxLength={10}
-                    placeholder="98765 43210"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                    className="w-full pl-20 pr-4 py-3 rounded-2xl border border-slate-200 text-sm font-mono font-bold focus:outline-hidden focus:ring-2 focus:ring-sky-500 shadow-inner"
-                  />
-                </div>
               </div>
 
-              <button
-                type="submit"
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold text-sm shadow-md shadow-sky-600/25 active:scale-98 transition-all flex items-center justify-center gap-2"
-              >
-                <span>Get OTP Code</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-
-              <div className="pt-2 text-center text-xs text-slate-400">
-                Demo Quick Fill:{" "}
-                <button
-                  type="button"
-                  onClick={() => setPhone('9876543210')}
-                  className="font-mono text-sky-600 hover:underline font-bold"
-                >
-                  9876543210 (Arun Rao)
-                </button>
-              </div>
-            </form>
-          ) : step === 'otp' ? (
-            /* Step 2: 4-digit OTP Input */
-            <form onSubmit={handleVerifyOtp} className="space-y-4">
-              <div>
-                <div className="flex justify-between items-center mb-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
-                    Enter 4-Digit OTP
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setStep('phone')}
-                    className="text-xs text-sky-600 hover:underline"
-                  >
-                    Change +91 {phone}
-                  </button>
-                </div>
-
-                <div className="relative">
-                  <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    required
-                    maxLength={4}
-                    placeholder="Enter 4-digit OTP"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                    className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 text-base font-mono font-black tracking-widest text-center focus:outline-hidden focus:ring-2 focus:ring-sky-500 shadow-inner"
-                  />
-                </div>
-              </div>
-
-              {/* Demo 1-Click Auto Fill */}
               <button
                 type="button"
-                onClick={() => setOtp('1234')}
-                className="w-full py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold border border-amber-200/80 transition-colors"
+                onClick={logout}
+                className="w-full py-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center justify-center gap-2 transition-colors border border-rose-200"
               >
-                ⚡ 1-Click Auto-Fill Demo OTP (1234)
+                <LogOut className="w-4 h-4" />
+                <span>Log Out & Clear All Session Data</span>
               </button>
-
-              <button
-                type="submit"
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm shadow-md shadow-emerald-600/25 active:scale-98 transition-all flex items-center justify-center gap-2"
-              >
-                <span>Verify & Login</span>
-                <CheckCircle2 className="w-4 h-4" />
-              </button>
-
-              <div className="flex justify-between items-center text-xs text-slate-400 pt-1">
-                <span>Didn&apos;t receive code?</span>
-                {countdown > 0 ? (
-                  <span>Resend in {countdown}s</span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setCountdown(30)}
-                    className="text-sky-600 font-bold hover:underline flex items-center gap-1"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                    <span>Resend OTP</span>
-                  </button>
-                )}
-              </div>
-            </form>
+            </div>
           ) : (
-            /* Step 3: Name & Email Profile Onboarding */
-            <form onSubmit={handleSaveProfile} className="space-y-4">
-              <div className="p-3 bg-sky-50 rounded-2xl text-xs text-sky-800 border border-sky-100">
-                <span className="font-bold">Almost there!</span> Tell us your name so we can address your laundry bags and invoice correctly.
+            /* Tabs: Sign In vs Create Account */
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-2xl border border-slate-200 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('login');
+                    setErrorMsg('');
+                  }}
+                  className={`py-2.5 rounded-xl transition-all cursor-pointer ${
+                    activeTab === 'login'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('signup');
+                    setErrorMsg('');
+                  }}
+                  className={`py-2.5 rounded-xl transition-all cursor-pointer ${
+                    activeTab === 'signup'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Create Account
+                </button>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
-                  First Name (Required) *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Rahul"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-sky-500"
-                />
-              </div>
+              {activeTab === 'login' ? (
+                /* TAB 1: Password Login */
+                <form onSubmit={handleLoginSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                      Mobile Number or Email *
+                    </label>
+                    <div className="relative">
+                      <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 9876543210 or yourname@mail.com"
+                        value={loginIdentifier}
+                        onChange={(e) => setLoginIdentifier(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-sky-500 shadow-inner"
+                      />
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
-                  Last Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Sharma"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-sky-500"
-                />
-              </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                      Password *
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type={showLoginPassword ? 'text' : 'password'}
+                        required
+                        placeholder="Enter your password"
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        className="w-full pl-10 pr-11 py-3 rounded-2xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-sky-500 shadow-inner"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowLoginPassword(!showLoginPassword)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                      >
+                        {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
-                  Email Address (for GST Invoices)
-                </label>
-                <input
-                  type="email"
-                  placeholder="e.g. rahul.sharma@gmail.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-sky-500"
-                />
-              </div>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-black text-sm shadow-md shadow-sky-600/25 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                  >
+                    <span>{isLoading ? 'Signing In...' : 'Sign In with Password'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
 
-              <button
-                type="submit"
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold text-sm shadow-md active:scale-98 transition-all"
-              >
-                Save & Continue
-              </button>
-            </form>
+                  <div className="text-center pt-1 text-xs text-slate-500">
+                    Don&apos;t have an account?{' '}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('signup')}
+                      className="font-bold text-sky-600 hover:underline"
+                    >
+                      Create one now
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                /* TAB 2: Signup / Account Creation */
+                <form onSubmit={handleSignupSubmit} className="space-y-4 text-xs">
+                  <div className="p-3 bg-sky-50 border border-sky-100 rounded-2xl text-sky-900 font-medium flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-sky-600 shrink-0" />
+                    <span>Get ₹100 Welcome Laundry Credit automatically upon signup!</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[11px]">
+                        First Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Ramesh"
+                        value={signupFirstName}
+                        onChange={(e) => setSignupFirstName(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-sky-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[11px]">
+                        Last Name
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Kumar"
+                        value={signupLastName}
+                        onChange={(e) => setSignupLastName(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-sky-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[11px]">
+                      10-Digit Mobile Number *
+                    </label>
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-slate-500 text-xs font-bold border-r border-slate-200 pr-2">
+                        <span>🇮🇳</span>
+                        <span>+91</span>
+                      </div>
+                      <input
+                        type="tel"
+                        required
+                        maxLength={10}
+                        placeholder="98765 43210"
+                        value={signupPhone}
+                        onChange={(e) => setSignupPhone(e.target.value.replace(/\D/g, ''))}
+                        className="w-full pl-18 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold focus:ring-2 focus:ring-sky-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[11px]">
+                      Email Address (for Invoices & Updates) *
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="email"
+                        required
+                        placeholder="e.g. ramesh@example.com"
+                        value={signupEmail}
+                        onChange={(e) => setSignupEmail(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-sky-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[11px]">
+                        Password (min 6 chars) *
+                      </label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                          type={showSignupPassword ? 'text' : 'password'}
+                          required
+                          minLength={6}
+                          placeholder="Password"
+                          value={signupPassword}
+                          onChange={(e) => setSignupPassword(e.target.value)}
+                          className="w-full pl-9 pr-8 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-sky-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowSignupPassword(!showSignupPassword)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                          {showSignupPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[11px]">
+                        Confirm Password *
+                      </label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                          type={showSignupPassword ? 'text' : 'password'}
+                          required
+                          minLength={6}
+                          placeholder="Confirm"
+                          value={signupConfirmPassword}
+                          onChange={(e) => setSignupConfirmPassword(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-sky-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <label className="flex items-start gap-2 pt-1 text-[11px] text-slate-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={agreeTerms}
+                      onChange={(e) => setAgreeTerms(e.target.checked)}
+                      className="mt-0.5 rounded text-sky-600 focus:ring-sky-500"
+                    />
+                    <span>
+                      I agree to the DhobiGhat Enterprise Terms of Service and Privacy Policy.
+                    </span>
+                  </label>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm shadow-md shadow-emerald-600/25 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                  >
+                    <span>{isLoading ? 'Creating Account...' : 'Create Account & Claim ₹100'}</span>
+                    <CheckCircle2 className="w-4 h-4" />
+                  </button>
+
+                  <div className="text-center pt-1 text-xs text-slate-500">
+                    Already have an account?{' '}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('login')}
+                      className="font-bold text-sky-600 hover:underline"
+                    >
+                      Sign in here
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           )}
 
           {/* Privacy Guarantee */}
           <div className="flex items-center justify-center gap-2 text-[11px] text-slate-400 border-t border-slate-100 pt-4">
             <ShieldCheck className="w-4 h-4 text-emerald-500" />
-            <span>Secure 256-bit encrypted Indian telecom OTP</span>
+            <span>Secure 256-bit encrypted authentication • SQL injection protected</span>
           </div>
 
         </div>
@@ -341,7 +523,7 @@ function CustomerAuthContent() {
 
 export default function CustomerAuthPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-slate-400">Loading Login...</div>}>
+    <Suspense fallback={<div className="p-8 text-center text-slate-400">Loading Account Access...</div>}>
       <CustomerAuthContent />
     </Suspense>
   );

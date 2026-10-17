@@ -284,6 +284,7 @@ export default function StoreFloorApp() {
     { key: 'delivered', label: 'Delivered (Closed)', group: 'delivery' },
     { key: 'disputed', label: 'Disputes & Claims', group: 'status' },
     { key: 'cancelled', label: 'Cancelled (Optional)', group: 'status' },
+    { key: 'manual_settlement', label: 'Manual Settlement (HQ)', group: 'status' },
   ];
 
   // Helper to normalize booking and processing statuses to current pipeline stage

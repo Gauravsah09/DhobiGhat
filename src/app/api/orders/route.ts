@@ -3,6 +3,7 @@ import { initialOrders, initialPriceMatrix, initialClothTypes, initialServices }
 import { Order, OrderStatus, GarmentOrderItem } from '@/types';
 import { notifyNewOrderIncoming } from '@/lib/fcm';
 import { getRequestSession } from '@/lib/auth-server';
+import { hasSqlInjection, sanitizeSqlInput, sanitizePhoneNumber } from '@/lib/security';
 
 // Server-side in-memory active order ledger (shared across API routes during runtime)
 declare global {
@@ -46,12 +47,30 @@ export function setOrderPinHash(orderId: string, pin: string) {
 // GET: Fetch orders with query filtering and role-based PII privacy masking
 export async function GET(req: NextRequest) {
   try {
-    const session = await getRequestSession(req);
     const { searchParams } = new URL(req.url);
-    const status = searchParams.get('status');
-    const channel = searchParams.get('channel');
-    const search = searchParams.get('search')?.toLowerCase();
-    const customerPhone = searchParams.get('customerPhone');
+    const session = await getRequestSession(req);
+    const rawStatus = searchParams.get('status');
+    const rawChannel = searchParams.get('channel');
+    const rawSearch = searchParams.get('search');
+    const rawCustomerPhone = searchParams.get('customerPhone');
+
+    // Reject SQL injection attempts immediately
+    if (
+      (rawStatus && hasSqlInjection(rawStatus)) ||
+      (rawChannel && hasSqlInjection(rawChannel)) ||
+      (rawSearch && hasSqlInjection(rawSearch)) ||
+      (rawCustomerPhone && hasSqlInjection(rawCustomerPhone))
+    ) {
+      return NextResponse.json(
+        { success: false, message: 'Invalid query parameters detected.' },
+        { status: 400 }
+      );
+    }
+
+    const status = rawStatus ? sanitizeSqlInput(rawStatus) : null;
+    const channel = rawChannel ? sanitizeSqlInput(rawChannel) : null;
+    const search = rawSearch ? sanitizeSqlInput(rawSearch).toLowerCase() : null;
+    const customerPhone = rawCustomerPhone ? sanitizePhoneNumber(rawCustomerPhone) : null;
 
     let orders = [...getSharedOrders()];
 
@@ -64,7 +83,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (customerPhone) {
-      orders = orders.filter((o) => o.customerPhone === customerPhone);
+      orders = orders.filter((o) => (o.customerPhone || '').replace(/\D/g, '').endsWith(customerPhone));
     }
 
     if (search) {

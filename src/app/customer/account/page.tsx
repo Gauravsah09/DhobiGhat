@@ -52,13 +52,13 @@ export default function CustomerAccountPage() {
           </div>
           <h2 className="text-xl font-black text-slate-900">Please Sign In</h2>
           <p className="text-xs text-slate-500">
-            Sign in with your 10-digit mobile number to view saved Indian addresses, wallet balance, and order history.
+            Sign in with your password to view saved Indian addresses, wallet balance, and order history.
           </p>
           <Link
             href="/customer/auth"
             className="inline-block px-6 py-3 rounded-2xl bg-sky-600 text-white font-bold text-xs shadow-md"
           >
-            Login with Mobile OTP
+            Sign In / Register
           </Link>
         </main>
       </div>

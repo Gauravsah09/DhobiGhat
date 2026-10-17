@@ -18,10 +18,11 @@ const LEGAL_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
   ironing: ['qc_check_packed'],
   qc_check_packed: ['drop_assigned'],
   drop_assigned: ['out_for_delivery', 'drop_assigned'],
-  delivered: ['closed', 'disputed'],
-  disputed: ['delivered', 'closed'],
-  closed: ['disputed'],
-  cancelled: [],
+  delivered: ['closed', 'disputed', 'manual_settlement'],
+  disputed: ['delivered', 'closed', 'manual_settlement'],
+  manual_settlement: ['closed'],
+  closed: ['disputed', 'manual_settlement'],
+  cancelled: ['manual_settlement'],
 };
 
 export async function PATCH(
@@ -29,10 +30,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const rawParams = await params;
+    const id = (rawParams?.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
     const session = await getRequestSession(req);
     const body = await req.json();
-    const { targetStatus, subStage, bagPieceCount, bagGrossWeightKg, actorName, notes } = body;
+    const targetStatus = body.targetStatus || body.status;
+    const { subStage, bagPieceCount, bagGrossWeightKg, actorName, notes } = body;
 
     const orders = getSharedOrders();
     const index = orders.findIndex((o) => o.id === id);
@@ -44,10 +47,11 @@ export async function PATCH(
     const currentOrder = orders[index];
     const currentStatus = currentOrder.status;
 
-    // 1. Verify Legal State Transition
+    // 1. Verify Legal State Transition (Admin can manually settle from any stage)
     if (targetStatus && targetStatus !== currentStatus) {
       const allowedNext = LEGAL_TRANSITIONS[currentStatus] || [];
-      if (!allowedNext.includes(targetStatus)) {
+      const isManualSettlement = targetStatus === 'manual_settlement';
+      if (!isManualSettlement && !allowedNext.includes(targetStatus)) {
         return NextResponse.json(
           {
             success: false,
@@ -102,3 +106,6 @@ export async function PATCH(
     return NextResponse.json({ success: false, message: err.message }, { status: 500 });
   }
 }
+
+export const POST = PATCH;
+

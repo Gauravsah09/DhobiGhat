@@ -141,11 +141,13 @@ export default function AdminConsoleApp() {
 
   // Order filters and settlement modal
   const [orderSearch, setOrderSearch] = useState('');
-  const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'active' | 'delivered' | 'closed' | 'payment_pending' | 'archived'>('all');
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'active' | 'delivered' | 'closed' | 'payment_pending' | 'archived' | 'manual_settlement'>('all');
   const [settleModalOrder, setSettleModalOrder] = useState<Order | null>(null);
   const [settleMethod, setSettleMethod] = useState<PaymentMethod>('cod_cash');
   const [settleRef, setSettleRef] = useState('');
   const [settleNotes, setSettleNotes] = useState('');
+  const [settleAmount, setSettleAmount] = useState<string>('');
+  const [settleReason, setSettleReason] = useState<string>('Manual Admin Settlement');
   const [settleSuccessMsg, setSettleSuccessMsg] = useState('');
 
   // Total metrics
@@ -898,7 +900,8 @@ export default function AdminConsoleApp() {
               <div className="flex bg-slate-950 p-1 rounded-2xl border border-slate-800 text-xs font-bold overflow-x-auto">
                 {[
                   { id: 'all', label: `All Active (${orders.filter(o => !o.isArchived).length})` },
-                  { id: 'active', label: `In Progress (${orders.filter(o => !['delivered', 'closed', 'cancelled'].includes(o.status) && !o.isArchived).length})` },
+                  { id: 'active', label: `In Progress (${orders.filter(o => !['delivered', 'closed', 'cancelled', 'manual_settlement'].includes(o.status) && !o.isArchived).length})` },
+                  { id: 'manual_settlement', label: `Manual Settlement (${orders.filter(o => o.status === 'manual_settlement' && !o.isArchived).length})` },
                   { id: 'delivered', label: `Delivered (${orders.filter(o => o.status === 'delivered' && !o.isArchived).length})` },
                   { id: 'closed', label: `Closed (${orders.filter(o => o.status === 'closed' && !o.isArchived).length})` },
                   { id: 'payment_pending', label: `Payment Due (${orders.filter(o => o.paymentStatus !== 'paid' && o.status !== 'cancelled' && !o.isArchived).length})` },
@@ -959,7 +962,9 @@ export default function AdminConsoleApp() {
                   {(() => {
                     const filtered = orders.filter((o) => {
                       if (orderStatusFilter === 'active') {
-                        if (['delivered', 'closed', 'cancelled'].includes(o.status) || o.isArchived) return false;
+                        if (['delivered', 'closed', 'cancelled', 'manual_settlement'].includes(o.status) || o.isArchived) return false;
+                      } else if (orderStatusFilter === 'manual_settlement') {
+                        if (o.status !== 'manual_settlement' || o.isArchived) return false;
                       } else if (orderStatusFilter === 'delivered') {
                         if (o.status !== 'delivered' || o.isArchived) return false;
                       } else if (orderStatusFilter === 'closed') {
@@ -1032,13 +1037,15 @@ export default function AdminConsoleApp() {
                             className={`px-2.5 py-0.5 rounded-full font-bold uppercase text-[10px] flex items-center gap-1 w-fit ${
                               ord.status === 'delivered'
                                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                : ord.status === 'closed'
+                              : ord.status === 'manual_settlement'
+                                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                              : ord.status === 'closed'
                                 ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
-                                : ord.status === 'out_for_delivery'
+                              : ord.status === 'out_for_delivery'
                                 ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 animate-pulse'
-                                : ord.status === 'cancelled'
+                              : ord.status === 'cancelled'
                                 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                             }`}
                           >
                             {ord.status === 'delivered' && <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
@@ -1058,21 +1065,29 @@ export default function AdminConsoleApp() {
                         </td>
                         <td className="py-3 px-3 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            {/* Settle & Close Button */}
-                            {ord.status !== 'closed' && (
+                            {/* Manual Settle Action Button */}
+                            {ord.status !== 'closed' && ord.status !== 'manual_settlement' && (
                               <button
                                 type="button"
                                 onClick={() => {
                                   setSettleModalOrder(ord);
                                   setSettleMethod(ord.paymentMethod || 'cod_cash');
-                                  setSettleRef(ord.upiTransactionRef || `SETTLE/ADMIN/${Date.now().toString().slice(-6)}`);
+                                  setSettleRef(ord.upiTransactionRef || `SETTLE/MANUAL/${Date.now().toString().slice(-6)}`);
                                   setSettleNotes('Manual admin settlement and closure at Central Order Desk');
+                                  setSettleAmount(ord.grandTotal.toString());
+                                  setSettleReason('Admin manual settlement');
                                 }}
                                 className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[11px] shadow-sm flex items-center gap-1 transition-all cursor-pointer"
                               >
                                 <CheckCircle2 className="w-3 h-3" />
-                                <span>Settle & Close</span>
+                                <span>Manual Settle</span>
                               </button>
+                            )}
+
+                            {ord.status === 'manual_settlement' && (
+                              <span className="px-2.5 py-0.5 rounded-lg bg-purple-500/20 border border-purple-500/30 text-purple-300 font-mono text-[10px] font-bold">
+                                Settled: ₹{ord.manualSettlement?.settledAmount ?? ord.paidAmount ?? ord.grandTotal}
+                              </span>
                             )}
 
                             {/* Archive Button for Completed Orders */}
@@ -1440,11 +1455,14 @@ export default function AdminConsoleApp() {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
+                  const effectiveAmount = parseFloat(settleAmount) || settleModalOrder.grandTotal;
                   const res = adminSettleAndCloseOrder(
                     settleModalOrder.id,
                     settleMethod,
                     settleRef,
-                    settleNotes
+                    settleNotes,
+                    effectiveAmount,
+                    settleReason
                   );
                   if (res.success) {
                     setSettleSuccessMsg(res.message);
@@ -1456,7 +1474,26 @@ export default function AdminConsoleApp() {
               >
                 <div>
                   <label className="block font-bold text-slate-300 mb-1">
-                    Select Settlement Payment Mode *
+                    Recorded Settlement Amount (₹) *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={settleAmount}
+                    onChange={(e) => setSettleAmount(e.target.value)}
+                    placeholder="e.g. 500"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white font-mono font-bold text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">
+                    Recorded amount will be booked as settled revenue and logged in financial registry.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-300 mb-1">
+                    Settlement Payment Mode *
                   </label>
                   <select
                     value={settleMethod}
@@ -1469,6 +1506,19 @@ export default function AdminConsoleApp() {
                     <option value="bank_transfer">Direct Bank Transfer (NEFT / IMPS)</option>
                     <option value="admin_waiver">Admin Management Waiver / Compensation</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-300 mb-1">
+                    Settlement Reason / Justification
+                  </label>
+                  <input
+                    type="text"
+                    value={settleReason}
+                    onChange={(e) => setSettleReason(e.target.value)}
+                    placeholder="e.g. Counter direct payment / VIP customer concession"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-600 focus:outline-none"
+                  />
                 </div>
 
                 <div>
@@ -1510,7 +1560,7 @@ export default function AdminConsoleApp() {
                     className="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center gap-1.5"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Confirm & Settle Order</span>
+                    <span>Confirm Manual Settlement</span>
                   </button>
                 </div>
               </form>

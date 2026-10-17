@@ -26,7 +26,7 @@ export default function MainPage() {
           </div>
           <div>
             <span className="text-lg font-black tracking-tight text-white block leading-tight">
-              Dhobhighat Enterprise
+              DhobiGhat Enterprise
             </span>
             <span className="text-[10px] font-extrabold uppercase tracking-widest text-sky-400">
               Modern Laundry & Dry Cleaning OS
@@ -46,13 +46,13 @@ export default function MainPage() {
         {/* Badge */}
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-sky-500/10 border border-sky-400/30 text-sky-400 text-xs font-bold">
           <Sparkles className="w-3.5 h-3.5" />
-          <span>Dhobhighat Enterprise Platform</span>
+          <span>DhobiGhat Enterprise Platform</span>
         </div>
 
         {/* Brand Name */}
         <div className="space-y-3">
           <h1 className="text-4xl sm:text-6xl font-black tracking-tight text-white">
-            Dhobhighat Enterprise
+            DhobiGhat Enterprise
           </h1>
           <p className="max-w-2xl mx-auto text-slate-300 text-base sm:text-lg leading-relaxed font-normal">
             Next-generation enterprise point-of-sale, doorstep logistics dispatch, and floor garment processing platform built for modern laundry and dry cleaning operations.
@@ -134,7 +134,7 @@ export default function MainPage() {
 
       {/* Footer */}
       <footer className="relative z-10 max-w-6xl w-full mx-auto px-6 py-6 border-t border-slate-900 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
-        <div>© 2026 Dhobhighat Enterprise. All rights reserved.</div>
+        <div>© 2026 DhobiGhat Enterprise. All rights reserved.</div>
         <div className="flex items-center gap-4 text-[11px] text-slate-400">
           <span>Enterprise Logistics Engine</span>
           <span>•</span>

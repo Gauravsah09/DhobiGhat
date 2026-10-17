@@ -84,6 +84,7 @@ export default function StoreFloorApp() {
     reconcileRiderPickup,
     qcCheckItem,
     raiseDispute,
+    resolveDispute,
     verifyAndCompleteDelivery,
     settleDeliveryUpiPayment,
     confirmUpiProviderPayment,
@@ -145,10 +146,22 @@ export default function StoreFloorApp() {
   const [dropRiderPhone, setDropRiderPhone] = useState('+91 91234 56789');
   const [dropSlotWindow, setDropSlotWindow] = useState('Morning (07:00 AM - 10:00 AM)');
 
-  // Rider handover weight modal state
+  // Rider handover weight modal state & photo evidence
   const [weightModalOrder, setWeightModalOrder] = useState<Order | null>(null);
   const [handoverWeight, setHandoverWeight] = useState('3.5');
   const [handoverPieces, setHandoverPieces] = useState('5');
+  const [handoverPhoto, setHandoverPhoto] = useState('');
+
+  // Store Manager Dispute Settlement Modal State
+  const [clearDisputeOrder, setClearDisputeOrder] = useState<Order | null>(null);
+  const [disputeResolutionNotes, setDisputeResolutionNotes] = useState('');
+  const [disputeAction, setDisputeAction] = useState<'approved_refund' | 'rejected'>('approved_refund');
+  const [disputeRefundAmt, setDisputeRefundAmt] = useState('0');
+
+  // Floor Dispute Filing Modal State (Delivered Orders)
+  const [storeDisputeModalOrder, setStoreDisputeModalOrder] = useState<Order | null>(null);
+  const [storeDisputeType, setStoreDisputeType] = useState<'damage' | 'stain_not_removed' | 'missing_item' | 'weight_mismatch'>('damage');
+  const [storeDisputeDesc, setStoreDisputeDesc] = useState('');
 
   // Walk-in Counter intake state
   const [walkinName, setWalkinName] = useState('');
@@ -201,33 +214,59 @@ export default function StoreFloorApp() {
   const walkinOrders = orders.filter((o: Order) => o.orderChannel === 'walk_in');
 
   // Role authorization checkers across Online and Walk-in orders:
-  // - Store Manager: Full access to all stages, POS, Kanban, Cash Close
-  // - Store Operator: Online ("Order Receive Queue", "Pickup assigned", "Drop Assigned", "Cancelled"). Walk-in (Counter POS & Cash Close)
-  // - Worker: Online floor (Received, Sorting, Washing, Drying, Ironing, QC Check & Packed Ready). Walk-in (Floor processing racks)
-  // - Rider: Online logistics (Out for Pickup, Order Picked-up, Reached Store, Out For Delivery, Delivered)
+  // 1. Store Manager: Whole pipeline access for Online Orders, Walk-in orders, Floor Processing Racks, Disputes & cash close
+  // 2. Store Operator:
+  //    - "Order Received" -> Move order access to "Pickup Assigned" Stage
+  //    - "Pickup Assigned" -> Access to assign Pickup rider and move stage to "Out For Pickup"
+  //    - "Reached Store" -> Move Reached Store status to "Received"
+  //    - "Drop Assigned" / "QC Check Packed" -> Access to assign Drop rider
+  //    - Walk-in Counter POS Intake & Shift Cash Close
+  // 3. Rider:
+  //    - "Out For Pickup" -> Collect clothes from customer based on weight and/or Pieces, upload pictures as evidence, move to "Order Picked-up"
+  //    - "Order Picked-up" -> Move status to "Reached Store"
+  //    - "Drop Assigned" -> Dispatch with clothes and move to "Out for Delivery"
+  //    - "Out for Delivery" -> Pick clothes, take UPI on Delivery or Cash on Delivery, verify PIN, complete delivery
+  // 4. Worker: Floor Operations ONLY - Received, Sorting, Washing, Drying, Ironing, QC check and Pack Ready
   const isAuthorizedForStage = (stage: OrderStatus, subStage?: ProcessingSubStage): boolean => {
     const norm = normalizeStatus(stage, subStage);
     if (currentRole === 'store_manager') return true;
     if (currentRole === 'store_operator') {
-      return norm === 'order_received' || norm === 'pickup_assigned' || norm === 'out_for_pickup' || norm === 'drop_assigned' || norm === 'cancelled';
-    }
-    if (currentRole === 'worker') {
-      return norm === 'order_received' || norm === 'pickup_assigned' || norm === 'received' || norm === 'sorting' || norm === 'washing' || norm === 'drying' || norm === 'ironing' || norm === 'qc_check_packed';
+      return (
+        norm === 'order_received' ||
+        norm === 'pickup_assigned' ||
+        norm === 'reached_store' ||
+        norm === 'qc_check_packed' ||
+        norm === 'drop_assigned' ||
+        norm === 'cancelled'
+      );
     }
     if (currentRole === 'rider') {
-      return norm === 'out_for_pickup' || norm === 'picked_up' || norm === 'reached_store' || norm === 'out_for_delivery' || norm === 'delivered';
+      return (
+        norm === 'out_for_pickup' ||
+        norm === 'picked_up' ||
+        norm === 'drop_assigned' ||
+        norm === 'out_for_delivery'
+      );
+    }
+    if (currentRole === 'worker') {
+      return (
+        norm === 'received' ||
+        norm === 'sorting' ||
+        norm === 'washing' ||
+        norm === 'drying' ||
+        norm === 'ironing' ||
+        norm === 'qc_check_packed'
+      );
     }
     return false;
   };
 
-  const canPerformWalkinIntake = currentRole === 'store_manager' || currentRole === 'store_operator' || currentRole === 'worker';
+  const canPerformWalkinIntake = currentRole === 'store_manager' || currentRole === 'store_operator';
   const canPerformKanbanFloor = currentRole === 'store_manager' || currentRole === 'worker';
   const canPerformCashClose = currentRole === 'store_manager' || currentRole === 'store_operator';
 
   // Online Pipeline Milestones:
-  // Merged: 6. QC Check and 7. Packed Ready -> "6. QC Check & Packed Ready"
-  // Added: "Drop Assigned" before Out for Delivery
-  // Added: "Cancelled (Optional)"
+  // 14-Stage Workflow + Disputed Claims + Cancelled
   const operatorMilestones: { key: OrderStatus; label: string; stageNumber?: string; group: 'pickup' | 'store' | 'delivery' | 'status' }[] = [
     { key: 'order_received', label: 'Order Receive Queue', group: 'pickup' },
     { key: 'pickup_assigned', label: 'Pickup Assigned (M/E)', group: 'pickup' },
@@ -242,7 +281,8 @@ export default function StoreFloorApp() {
     { key: 'qc_check_packed', label: '6. QC Check & Packed Ready', stageNumber: '6', group: 'store' },
     { key: 'drop_assigned', label: 'Drop Assigned', group: 'delivery' },
     { key: 'out_for_delivery', label: 'Out for Delivery', group: 'delivery' },
-    { key: 'delivered', label: 'Delivered', group: 'delivery' },
+    { key: 'delivered', label: 'Delivered (Closed)', group: 'delivery' },
+    { key: 'disputed', label: 'Disputes & Claims', group: 'status' },
     { key: 'cancelled', label: 'Cancelled (Optional)', group: 'status' },
   ];
 
@@ -398,68 +438,33 @@ export default function StoreFloorApp() {
     }, 7000);
   };
 
-  // Quick intake for incoming doorstep pickup order by Store Operator
-  const handleQuickCreatePickupOrder = () => {
-    const defaultAddress: IndianAddress = {
-      id: `addr-${Date.now()}`,
-      label: 'Home',
-      flatNo: 'Flat 402, Block B',
-      society: 'Prestige Ozone Apartments',
-      street: '12th Main, HAL 2nd Stage, Indiranagar',
-      city: 'Bengaluru',
-      state: 'Karnataka',
-      pincode: '560038',
-      isDefault: true,
-    };
+  // Store Manager: Clear and settle customer dispute
+  const handleConfirmClearDispute = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clearDisputeOrder || !clearDisputeOrder.dispute) return;
+    resolveDispute(
+      clearDisputeOrder.id,
+      clearDisputeOrder.dispute.id,
+      disputeAction,
+      disputeResolutionNotes || 'Dispute reviewed and cleared by Store Manager Vikas Patil',
+      parseFloat(disputeRefundAmt) || 0
+    );
+    alert(`Dispute for Order #${clearDisputeOrder.invoiceNo} has been cleared and settled.`);
+    setClearDisputeOrder(null);
+  };
 
-    const newOrd = createOrder({
-      status: 'order_received',
-      orderChannel: 'online',
-      storeId: staff?.storeId || branches[0]?.id || 'branch-blr-1',
-      storeName: staff?.storeName || branches[0]?.name || 'Bengaluru - Indiranagar Flagship',
-      customerId: 'cust-1',
-      customerName: 'Arun Rao',
-      customerPhone: '9876543210',
-      pickupAddress: defaultAddress,
-      orderDate: new Date().toISOString().split('T')[0],
-      pickupSlot: {
-        date: new Date().toISOString().split('T')[0],
-        window: 'Morning (07:00 AM - 10:00 AM)',
-      },
-      deliveryDate: new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0],
-      deliverySlotWindow: 'Morning (07:00 AM - 10:00 AM)',
-      items: [
-        {
-          id: `item-${Date.now()}-1`,
-          clothId: clothTypes[0]?.id || 'c-1',
-          clothName: 'Men Shirt / T-Shirt',
-          serviceId: services[0]?.id || 's-1',
-          serviceName: 'Dry Cleaning',
-          unitPrice: 89,
-          quantity: 3,
-          total: 267,
-          foldStyle: 'hanger',
-          tagBarcode: `BAR-${Date.now().toString().slice(-4)}-01`,
-        },
-      ],
-      totalQty: 3,
-      subtotal: 267,
-      discountPct: 0,
-      discountAmount: 0,
-      deliveryFee: 0,
-      gstRate: settings.taxRate || 18,
-      gstAmount: 48.06,
-      grandTotal: 315.06,
-      paymentMethod: 'cod_cash',
-      paymentStatus: 'pending',
-      remarks: `[Store Desk Intake] Phone doorstep pickup booked by Store Operator ${staff?.name || 'Ramesh Sharma'}`,
+  // Report dispute from store floor on delivered order
+  const handleConfirmStoreDispute = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!storeDisputeModalOrder) return;
+    raiseDispute({
+      orderId: storeDisputeModalOrder.id,
+      invoiceNo: storeDisputeModalOrder.invoiceNo,
+      issueType: storeDisputeType,
+      description: storeDisputeDesc || 'Customer reported issue upon receiving clothes.',
     });
-
-    setOnlineMilestoneFilter('order_received');
-    setAssignModalOrder(newOrd);
-    setSelectedRiderName(availableRiders[0]?.name || 'Mahesh Rider');
-    setSelectedRiderPhone(availableRiders[0]?.phone || '+91 98765 43216');
-    setSelectedSlotWindow('Morning');
+    alert(`Dispute filed for Order #${storeDisputeModalOrder.invoiceNo}. Moved to Disputes queue for Store Manager resolution.`);
+    setStoreDisputeModalOrder(null);
   };
 
   // Submit Drop Rider Assignment
@@ -479,18 +484,21 @@ export default function StoreFloorApp() {
     }
   };
 
-  // Submit Rider Weight Handover
+  // Submit Rider Weight Handover with Photo Evidence
   const handleConfirmWeightHandover = (e: React.FormEvent) => {
     e.preventDefault();
     if (!weightModalOrder) return;
+    const photoEvidence = handoverPhoto || 'https://images.unsplash.com/photo-1582735689369-4fe89db7114c?auto=format&fit=crop&w=400&q=80';
     reconcileRiderPickup(weightModalOrder.id, {
       riderWeightKg: parseFloat(handoverWeight) || 3.0,
       bagCount: parseInt(handoverPieces, 10) || weightModalOrder.totalQty,
       storeVerifiedWeightKg: parseFloat(handoverWeight) || 3.0,
+      riderPhotoEvidence: photoEvidence,
       mismatchResolved: true,
     });
     advanceOnlinePipeline(weightModalOrder.id, 'picked_up');
     setWeightModalOrder(null);
+    setHandoverPhoto('');
   };
 
   // Unauthenticated Guard
@@ -552,12 +560,13 @@ export default function StoreFloorApp() {
 
             <button
               type="button"
+              id="store-logout-btn"
               onClick={logoutStaff}
-              title="End Shift & Sign Out"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-rose-300 hover:text-white bg-rose-500/10 hover:bg-rose-600/30 border border-rose-500/20 text-xs font-bold transition-colors"
+              title="Logout from Store Portal"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-rose-300 hover:text-white bg-rose-500/10 hover:bg-rose-600/30 border border-rose-500/20 text-xs font-bold transition-colors cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span>End Shift</span>
+              <span>Logout</span>
             </button>
 
             <Link
@@ -649,9 +658,9 @@ export default function StoreFloorApp() {
                 </p>
               </div>
 
-              {/* Search Bar & Quick Order Intake */}
+              {/* Search Bar */}
               <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
-                <div className="relative w-full sm:w-64">
+                <div className="relative w-full sm:w-72">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
@@ -661,17 +670,27 @@ export default function StoreFloorApp() {
                     className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
                   />
                 </div>
-                <button
-                  type="button"
-                  id="quick-new-pickup-order-btn"
-                  onClick={handleQuickCreatePickupOrder}
-                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs shadow-md shadow-emerald-700/20 flex items-center gap-1.5 transition-all hover:scale-[1.02] shrink-0 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>+ New Doorstep Pickup Order</span>
-                </button>
               </div>
             </div>
+
+            {/* Active Disputes Alert Banner */}
+            {onlineOrders.some((o) => normalizeStatus(o.status, o.subStage) === 'disputed') && (
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-lg shadow-amber-950/20">
+                <div className="flex items-center gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>
+                    <strong>Dispute Alert:</strong> {onlineOrders.filter((o) => normalizeStatus(o.status, o.subStage) === 'disputed').length} order(s) have active customer disputes awaiting Store Manager review and settlement.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOnlineMilestoneFilter('disputed')}
+                  className="px-3 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 font-bold border border-amber-500/40 text-[11px] shrink-0 transition-colors"
+                >
+                  View Disputes ➔
+                </button>
+              </div>
+            )}
 
             {/* Visual 14-Stage Interactive Milestone Stepper Filter */}
             <div className="space-y-2">
@@ -750,23 +769,12 @@ export default function StoreFloorApp() {
               )}
 
               {filteredOnlineOrders.length === 0 ? (
-                <div className="p-12 text-center rounded-3xl bg-slate-800/40 border border-slate-800 text-slate-400 space-y-4">
+                <div className="p-12 text-center rounded-3xl bg-slate-800/40 border border-slate-800 text-slate-400 space-y-3">
                   <Package className="w-10 h-10 mx-auto text-slate-600" />
                   <p className="font-bold text-sm text-slate-300">No online orders found in this stage.</p>
-                  <p className="text-xs text-slate-500">
-                    Switch stages above, select &quot;View All Stages&quot;, or intake a new customer doorstep pickup booking below.
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    Switch stages above or select &quot;View All Stages&quot;. Incoming doorstep pickup orders placed by customers through the Customer Booking Portal will automatically appear here.
                   </p>
-                  <div className="pt-2 flex justify-center">
-                    <button
-                      type="button"
-                      id="empty-state-new-pickup-btn"
-                      onClick={handleQuickCreatePickupOrder}
-                      className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs shadow-lg shadow-emerald-700/30 flex items-center gap-2 transition-all hover:scale-[1.02] cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>+ Create Incoming Doorstep Pickup Order</span>
-                    </button>
-                  </div>
                 </div>
               ) : (
                 filteredOnlineOrders.map((ord) => {
@@ -852,6 +860,58 @@ export default function StoreFloorApp() {
                         ))}
                       </div>
 
+                      {/* Rider Pickup Photo Evidence (Visible to Customer, Rider, Store Operator, Manager) */}
+                      {ord.riderHandover?.riderPhotoEvidence && (
+                        <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-700/80 flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-600 bg-slate-950 shrink-0">
+                              <img
+                                src={ord.riderHandover.riderPhotoEvidence}
+                                alt="Rider Pickup Evidence"
+                                className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
+                                onClick={() => window.open(ord.riderHandover?.riderPhotoEvidence, '_blank')}
+                              />
+                            </div>
+                            <div>
+                              <span className="font-bold text-white flex items-center gap-1.5">
+                                <Camera className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>Rider Doorstep Intake Photo Evidence</span>
+                              </span>
+                              <span className="text-[11px] text-slate-400 block mt-0.5">
+                                Verified by {ord.riderHandover.riderName || 'Rider'} • {ord.riderHandover.riderWeightKg || ord.recordedWeightKg || 3} kg scale intake, {ord.riderHandover.bagCount || ord.totalQty} garments
+                              </span>
+                            </div>
+                          </div>
+                          <a
+                            href={ord.riderHandover.riderPhotoEvidence}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs font-bold text-sky-400 hover:text-sky-300 underline shrink-0"
+                          >
+                            View Evidence ➔
+                          </a>
+                        </div>
+                      )}
+
+                      {/* Dispute Details Banner if active */}
+                      {ord.dispute && (
+                        <div className="p-3.5 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-xs space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold text-amber-300 uppercase text-[10px] flex items-center gap-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Customer Dispute: {ord.dispute.issueType.replace(/_/g, ' ')} ({ord.dispute.status})</span>
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400">{formatDateTime(ord.dispute.raisedAt)}</span>
+                          </div>
+                          <p className="text-slate-200 italic">&quot;{ord.dispute.description}&quot;</p>
+                          {ord.dispute.resolutionNotes && (
+                            <div className="pt-1 border-t border-amber-500/20 text-emerald-300 font-medium">
+                              Resolution: {ord.dispute.resolutionNotes} {ord.dispute.refundAmount ? `(Refund: ₹${ord.dispute.refundAmount})` : ''}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Interactive Stage Driver Buttons with RBAC Role Enforcement */}
                       <div className="pt-2 border-t border-slate-700/60 flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
@@ -886,9 +946,9 @@ export default function StoreFloorApp() {
                             </button>
                           )}
 
-                          {/* STAGE 1: ORDER RECEIVE QUEUE */}
+                          {/* STAGE 1: ORDER RECEIVE QUEUE (Store Operator & Manager) */}
                           {(normStatus === 'order_received' || normStatus === 'booked' || normStatus === 'pending') && (
-                            currentRole === 'store_manager' || currentRole === 'store_operator' || currentRole === 'worker' ? (
+                            currentRole === 'store_manager' || currentRole === 'store_operator' ? (
                               <button
                                 type="button"
                                 id={`assign-rider-btn-${ord.id}`}
@@ -908,7 +968,7 @@ export default function StoreFloorApp() {
                                 className="px-4 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-xs shadow-md shadow-sky-600/25 flex items-center gap-1.5 transition-all hover:scale-[1.02]"
                               >
                                 <Truck className="w-3.5 h-3.5" />
-                                <span>Assign Pickup Rider (Morning/Evening)</span>
+                                <span>Assign Pickup Rider ➔ Move to Pickup Assigned</span>
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
@@ -917,49 +977,8 @@ export default function StoreFloorApp() {
                             )
                           )}
 
-                          {/* STAGE 2: PICKUP ASSIGNED */}
+                          {/* STAGE 2: PICKUP ASSIGNED (Store Operator & Manager) */}
                           {normStatus === 'pickup_assigned' && (
-                            <div className="flex flex-wrap items-center gap-2">
-                              {(currentRole === 'store_manager' || currentRole === 'store_operator' || currentRole === 'worker') && (
-                                <button
-                                  type="button"
-                                  id={`reassign-rider-btn-${ord.id}`}
-                                  onClick={() => {
-                                    setAssignModalOrder(ord);
-                                    const currentRider = ord.pickupBy || ord.riderHandover?.riderName;
-                                    if (currentRider) {
-                                      setSelectedRiderName(currentRider);
-                                      const matched = availableRiders.find(r => r.name === currentRider);
-                                      if (matched) setSelectedRiderPhone(matched.phone);
-                                    } else {
-                                      setSelectedRiderName(availableRiders[0]?.name || 'Mahesh Rider');
-                                      setSelectedRiderPhone(availableRiders[0]?.phone || '+91 98765 43216');
-                                    }
-                                    setSelectedSlotWindow(ord.pickupSlot?.window?.includes('Evening') ? 'Evening' : 'Morning');
-                                  }}
-                                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-xs shadow-md shadow-sky-600/25 flex items-center gap-1.5 transition-all hover:scale-[1.02]"
-                                >
-                                  <Truck className="w-3.5 h-3.5" />
-                                  <span>{ord.pickupBy || ord.riderHandover?.riderName ? `Reassign Pickup Rider (${ord.pickupBy || ord.riderHandover?.riderName})` : 'Assign Pickup Rider'}</span>
-                                </button>
-                              )}
-
-                              {(currentRole === 'store_manager' || currentRole === 'rider' || currentRole === 'store_operator') && (
-                                <button
-                                  type="button"
-                                  id={`dispatch-rider-btn-${ord.id}`}
-                                  onClick={() => advanceOnlinePipeline(ord.id, 'out_for_pickup')}
-                                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-sky-600/20"
-                                >
-                                  <Truck className="w-3.5 h-3.5" />
-                                  <span>Rider En Route (Out for Pickup)</span>
-                                </button>
-                              )}
-                            </div>
-                          )}
-
-                          {/* STAGE 3: OUT FOR PICKUP */}
-                          {normStatus === 'out_for_pickup' && (
                             <div className="flex flex-wrap items-center gap-2">
                               {(currentRole === 'store_manager' || currentRole === 'store_operator') && (
                                 <button
@@ -981,11 +1000,56 @@ export default function StoreFloorApp() {
                                   className="px-3.5 py-2 rounded-xl bg-slate-700/80 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 border border-slate-600 transition-colors"
                                 >
                                   <Truck className="w-3.5 h-3.5 text-sky-400" />
-                                  <span>Reassign Pickup Rider ({ord.pickupBy || ord.riderHandover?.riderName || 'Rider'})</span>
+                                  <span>{ord.pickupBy || ord.riderHandover?.riderName ? `Reassign (${ord.pickupBy || ord.riderHandover?.riderName})` : 'Assign Rider'}</span>
                                 </button>
                               )}
 
-                              {(currentRole === 'store_manager' || currentRole === 'rider' || currentRole === 'store_operator') && (
+                              {(currentRole === 'store_manager' || currentRole === 'store_operator') ? (
+                                <button
+                                  type="button"
+                                  id={`dispatch-rider-btn-${ord.id}`}
+                                  onClick={() => advanceOnlinePipeline(ord.id, 'out_for_pickup')}
+                                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-sky-600/20"
+                                >
+                                  <Truck className="w-3.5 h-3.5" />
+                                  <span>Move to Out for Pickup</span>
+                                </button>
+                              ) : (
+                                <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
+                                  🔒 Requires Store Operator or Manager
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* STAGE 3: OUT FOR PICKUP (Rider collects clothes, enters weight/pcs, uploads evidence) */}
+                          {normStatus === 'out_for_pickup' && (
+                            <div className="flex flex-wrap items-center gap-2">
+                              {(currentRole === 'store_manager' || currentRole === 'store_operator') && (
+                                <button
+                                  type="button"
+                                  id={`reassign-rider-btn-${ord.id}`}
+                                  onClick={() => {
+                                    setAssignModalOrder(ord);
+                                    const currentRider = ord.pickupBy || ord.riderHandover?.riderName;
+                                    if (currentRider) {
+                                      setSelectedRiderName(currentRider);
+                                      const matched = availableRiders.find(r => r.name === currentRider);
+                                      if (matched) setSelectedRiderPhone(matched.phone);
+                                    } else {
+                                      setSelectedRiderName(availableRiders[0]?.name || 'Mahesh Rider');
+                                      setSelectedRiderPhone(availableRiders[0]?.phone || '+91 98765 43216');
+                                    }
+                                    setSelectedSlotWindow(ord.pickupSlot?.window?.includes('Evening') ? 'Evening' : 'Morning');
+                                  }}
+                                  className="px-3 py-2 rounded-xl bg-slate-700/80 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center gap-1.5 border border-slate-600"
+                                >
+                                  <Truck className="w-3.5 h-3.5 text-sky-400" />
+                                  <span>Reassign Rider</span>
+                                </button>
+                              )}
+
+                              {(currentRole === 'store_manager' || currentRole === 'rider') ? (
                                 <button
                                   type="button"
                                   id={`rider-collected-btn-${ord.id}`}
@@ -993,26 +1057,31 @@ export default function StoreFloorApp() {
                                     setWeightModalOrder(ord);
                                     setHandoverPieces(ord.totalQty.toString());
                                     setHandoverWeight((ord.recordedWeightKg || 3.0).toString());
+                                    setHandoverPhoto(ord.riderHandover?.riderPhotoEvidence || '');
                                   }}
-                                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5"
+                                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-amber-600/30"
                                 >
                                   <Scale className="w-3.5 h-3.5" />
-                                  <span>Rider Collected Bag (Order Picked-up)</span>
+                                  <span>Collect Clothes & Upload Photo Proof (Mark Picked-Up)</span>
                                 </button>
+                              ) : (
+                                <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
+                                  🔒 Requires Rider to collect & weigh clothes at customer doorstep
+                                </span>
                               )}
                             </div>
                           )}
 
-                          {/* STAGE 4: ORDER PICKED-UP */}
+                          {/* STAGE 4: ORDER PICKED-UP (Rider moves to Reached Store) */}
                           {normStatus === 'picked_up' && (
                             currentRole === 'store_manager' || currentRole === 'rider' ? (
                               <button
                                 type="button"
                                 onClick={() => advanceOnlinePipeline(ord.id, 'reached_store')}
-                                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5"
+                                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/30"
                               >
                                 <Building2 className="w-3.5 h-3.5" />
-                                <span>Rider Arrived (Reached Store)</span>
+                                <span>Rider Arrived (Move to Reached Store)</span>
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
@@ -1021,25 +1090,25 @@ export default function StoreFloorApp() {
                             )
                           )}
 
-                          {/* STAGE 5: REACHED STORE */}
+                          {/* STAGE 5: REACHED STORE (Store Operator moves to Received) */}
                           {normStatus === 'reached_store' && (
-                            currentRole === 'store_manager' || currentRole === 'worker' ? (
+                            currentRole === 'store_manager' || currentRole === 'store_operator' ? (
                               <button
                                 type="button"
                                 onClick={() => advanceOnlinePipeline(ord.id, 'received')}
-                                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5"
+                                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/30"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
-                                <span>Store Intake Scan (1. Received)</span>
+                                <span>Store Intake Scan (Move to 1. Received)</span>
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                🔒 Requires Worker Floor Check-In
+                                🔒 Requires Store Operator or Manager to Check-In to Floor
                               </span>
                             )
                           )}
 
-                          {/* STAGES 1 TO 5 (WORKER / MANAGER) */}
+                          {/* STAGES 1 TO 5 (WORKER / MANAGER FLOOR OPERATIONS) */}
                           {normStatus === 'received' && (
                             currentRole === 'store_manager' || currentRole === 'worker' ? (
                               <button
@@ -1052,7 +1121,7 @@ export default function StoreFloorApp() {
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                🔒 Requires Worker
+                                🔒 Requires Floor Worker or Manager
                               </span>
                             )
                           )}
@@ -1069,7 +1138,7 @@ export default function StoreFloorApp() {
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                🔒 Requires Worker
+                                🔒 Requires Floor Worker or Manager
                               </span>
                             )
                           )}
@@ -1086,7 +1155,7 @@ export default function StoreFloorApp() {
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                🔒 Requires Worker
+                                🔒 Requires Floor Worker or Manager
                               </span>
                             )
                           )}
@@ -1103,7 +1172,7 @@ export default function StoreFloorApp() {
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                🔒 Requires Worker
+                                🔒 Requires Floor Worker or Manager
                               </span>
                             )
                           )}
@@ -1120,23 +1189,15 @@ export default function StoreFloorApp() {
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                🔒 Requires Worker
+                                🔒 Requires Floor Worker or Manager
                               </span>
                             )
                           )}
 
-                          {/* MERGED STAGE 6: QC CHECK & PACKED READY */}
+                          {/* STAGE 6: QC CHECK & PACKED READY (Worker checks & packs, Operator assigns Drop Rider) */}
                           {normStatus === 'qc_check_packed' && (
-                            currentRole === 'store_manager' || currentRole === 'worker' ? (
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => advanceOnlinePipeline(ord.id, 'drop_assigned')}
-                                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  <span>Pass QC & Pack Ready ➔ Ready for Drop</span>
-                                </button>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {(currentRole === 'store_manager' || currentRole === 'worker') && (
                                 <button
                                   type="button"
                                   onClick={() => advanceOnlinePipeline(ord.id, 'washing')}
@@ -1144,15 +1205,30 @@ export default function StoreFloorApp() {
                                 >
                                   Rework Wash
                                 </button>
-                              </div>
-                            ) : (
-                              <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                🔒 Requires Floor Worker for QC Check & Packing
-                              </span>
-                            )
+                              )}
+
+                              {(currentRole === 'store_manager' || currentRole === 'store_operator') ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDropModalOrder(ord);
+                                    if (ord.dropRiderName) setDropRiderName(ord.dropRiderName);
+                                    if (ord.dropSlotWindow) setDropSlotWindow(ord.dropSlotWindow);
+                                  }}
+                                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
+                                >
+                                  <Truck className="w-3.5 h-3.5" />
+                                  <span>Assign Drop Rider ➔ Move to Drop Assigned</span>
+                                </button>
+                              ) : (
+                                <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
+                                  🔒 Requires Store Operator or Manager to Assign Drop Rider
+                                </span>
+                              )}
+                            </div>
                           )}
 
-                          {/* NEW STAGE: DROP ASSIGNED (BEFORE OUT FOR DELIVERY) */}
+                          {/* STAGE: DROP ASSIGNED (Operator assigns/reassigns, Rider dispatches) */}
                           {normStatus === 'drop_assigned' && (
                             <div className="flex flex-wrap items-center gap-2">
                               {(currentRole === 'store_manager' || currentRole === 'store_operator') && (
@@ -1177,7 +1253,7 @@ export default function StoreFloorApp() {
                                   className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md"
                                 >
                                   <Truck className="w-3.5 h-3.5" />
-                                  <span>Dispatch with Rider (Out for Delivery)</span>
+                                  <span>Leave for Delivery Destination (Out for Delivery)</span>
                                 </button>
                               )}
 
@@ -1189,7 +1265,7 @@ export default function StoreFloorApp() {
                             </div>
                           )}
 
-                          {/* OUT FOR DELIVERY */}
+                          {/* STAGE: OUT FOR DELIVERY (Rider collects UPI/Cash & verifies PIN) */}
                           {normStatus === 'out_for_delivery' && (
                             currentRole === 'store_manager' || currentRole === 'rider' ? (
                               <button
@@ -1205,21 +1281,65 @@ export default function StoreFloorApp() {
                                 className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/30 transition-all"
                               >
                                 <KeyRound className="w-3.5 h-3.5" />
-                                <span>Verify Customer PIN & Deliver</span>
+                                <span>Take Payment (UPI/Cash) & Complete Delivery</span>
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                🔒 Requires Delivery Rider (PIN Handover)
+                                🔒 Requires Delivery Rider (Payment & Delivery Handover)
                               </span>
                             )
                           )}
 
-                          {/* DELIVERED */}
+                          {/* STAGE: DELIVERED (Closed Stage - No processing here, report dispute option) */}
                           {normStatus === 'delivered' && (
-                            <span className="px-3.5 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 font-bold text-xs border border-emerald-500/20 flex items-center gap-1.5">
-                              <CheckCircle2 className="w-4 h-4" />
-                              <span>Delivered & Payment Settled</span>
-                            </span>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="px-3.5 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 font-bold text-xs border border-emerald-500/20 flex items-center gap-1.5">
+                                <CheckCircle2 className="w-4 h-4" />
+                                <span>Delivered (Closed Stage - Completed)</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setStoreDisputeModalOrder(ord);
+                                  setStoreDisputeType('damage');
+                                  setStoreDisputeDesc('');
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-bold text-xs border border-amber-500/30 flex items-center gap-1 transition-colors"
+                              >
+                                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                                <span>Report Dispute</span>
+                              </button>
+                            </div>
+                          )}
+
+                          {/* STAGE: DISPUTED (Store Manager can clear disputes) */}
+                          {normStatus === 'disputed' && (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="px-3.5 py-1.5 rounded-xl bg-amber-500/10 text-amber-300 font-bold text-xs border border-amber-500/30 flex items-center gap-1.5">
+                                <AlertTriangle className="w-4 h-4 text-amber-400" />
+                                <span>Active Dispute</span>
+                              </span>
+
+                              {currentRole === 'store_manager' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setClearDisputeOrder(ord);
+                                    setDisputeResolutionNotes('');
+                                    setDisputeAction('approved_refund');
+                                    setDisputeRefundAmt((ord.grandTotal || 0).toString());
+                                  }}
+                                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-extrabold text-xs shadow-md shadow-amber-600/30 flex items-center gap-1.5"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Review & Clear Dispute (Manager)</span>
+                                </button>
+                              ) : (
+                                <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
+                                  🔒 Store Manager resolution required to clear dispute
+                                </span>
+                              )}
+                            </div>
                           )}
 
                           {/* CANCELLED */}
@@ -1979,12 +2099,53 @@ export default function StoreFloorApp() {
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
-                <span className="text-slate-400">Weigh Scale Photo Evidence:</span>
-                <span className="text-emerald-400 font-bold flex items-center gap-1">
-                  <Camera className="w-3.5 h-3.5" />
-                  <span>Captured (Rider App)</span>
-                </span>
+              <div className="space-y-2 p-3.5 rounded-2xl bg-slate-900 border border-slate-800">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-300 font-bold flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-emerald-400" />
+                    <span>Garment & Scale Photo Evidence:</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">Rider App</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setHandoverPhoto(reader.result as string);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="text-xs text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-sky-600 file:text-white hover:file:bg-sky-500 cursor-pointer"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHandoverPhoto('https://images.unsplash.com/photo-1582735689369-4fe89db7114c?auto=format&fit=crop&w=400&q=80');
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px] font-bold shrink-0"
+                  >
+                    Quick Photo Proof
+                  </button>
+                </div>
+
+                {handoverPhoto && (
+                  <div className="mt-2 flex items-center gap-3">
+                    <div className="w-16 h-16 rounded-xl overflow-hidden border border-emerald-500/50 relative shrink-0">
+                      <img src={handoverPhoto} alt="Intake Evidence" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="text-[11px] text-emerald-400">
+                      ✓ Evidence photo attached. Customer, Rider, and Store Operator can view this in order details.
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-2 pt-2">
@@ -2555,6 +2716,173 @@ export default function StoreFloorApp() {
                   className="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold shadow-md shadow-purple-600/30"
                 >
                   Save Configuration
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: STORE MANAGER CLEAR DISPUTE */}
+      {clearDisputeOrder && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="max-w-md w-full rounded-3xl bg-slate-800 border border-slate-700 p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-start border-b border-slate-700/80 pb-3">
+              <div>
+                <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400">
+                  Store Manager Dispute Desk
+                </span>
+                <h3 className="text-base font-black text-white mt-1">
+                  Clear & Settle Dispute • #{clearDisputeOrder.invoiceNo}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Customer: <span className="text-white font-bold">{clearDisputeOrder.customerName}</span> ({clearDisputeOrder.customerPhone})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setClearDisputeOrder(null)}
+                className="w-8 h-8 rounded-full bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 text-xs space-y-1.5">
+              <div className="text-amber-400 font-bold flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                <span>Issue Type: {clearDisputeOrder.dispute?.issueType?.replace(/_/g, ' ') || 'Dispute Claim'}</span>
+              </div>
+              <div className="text-slate-300 italic">
+                &quot;{clearDisputeOrder.dispute?.description || 'Customer reported dissatisfaction with delivered order.'}&quot;
+              </div>
+              <div className="text-[10px] text-slate-400 pt-1">
+                Order Value: <span className="font-mono text-white font-bold">₹{clearDisputeOrder.grandTotal.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleConfirmClearDispute} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">Manager Resolution Decision</label>
+                <select
+                  value={disputeAction}
+                  onChange={(e) => setDisputeAction(e.target.value as any)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 font-bold text-white"
+                >
+                  <option value="approved_refund">✅ Clear Dispute & Approve Refund / Wallet Credit</option>
+                  <option value="rejected">✅ Clear Dispute as Resolved / No Fault Found</option>
+                </select>
+              </div>
+
+              {disputeAction === 'approved_refund' && (
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Approved Settlement Amount (₹)</label>
+                  <input
+                    type="number"
+                    value={disputeRefundAmt}
+                    onChange={(e) => setDisputeRefundAmt(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 font-bold text-white font-mono"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">Store Manager Audit Notes</label>
+                <textarea
+                  value={disputeResolutionNotes}
+                  onChange={(e) => setDisputeResolutionNotes(e.target.value)}
+                  placeholder="Record manager resolution details (e.g. Inspected stain, dry-cleaned again, customer satisfied and accepted clothes)..."
+                  required
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setClearDisputeOrder(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-700 text-slate-300 font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold shadow-md shadow-emerald-600/30"
+                >
+                  Clear Dispute & Settle Order
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: REPORT DISPUTE ON DELIVERED ORDER */}
+      {storeDisputeModalOrder && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="max-w-md w-full rounded-3xl bg-slate-800 border border-slate-700 p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-start border-b border-slate-700/80 pb-3">
+              <div>
+                <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-400">
+                  Customer Claim Filing
+                </span>
+                <h3 className="text-base font-black text-white mt-1">
+                  Report Dispute • #{storeDisputeModalOrder.invoiceNo}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Customer: <span className="text-white font-bold">{storeDisputeModalOrder.customerName}</span> ({storeDisputeModalOrder.customerPhone})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStoreDisputeModalOrder(null)}
+                className="w-8 h-8 rounded-full bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmStoreDispute} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">Issue Category</label>
+                <select
+                  value={storeDisputeType}
+                  onChange={(e) => setStoreDisputeType(e.target.value as any)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 font-bold text-white"
+                >
+                  <option value="damage">⚠️ Fabric Tear / Damage</option>
+                  <option value="stain_not_removed">🫧 Stain Not Removed / Bleed</option>
+                  <option value="missing_item">🔍 Missing Garment / Item</option>
+                  <option value="weight_mismatch">⚖️ Weight or Count Mismatch</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">Complaint Description</label>
+                <textarea
+                  value={storeDisputeDesc}
+                  onChange={(e) => setStoreDisputeDesc(e.target.value)}
+                  placeholder="Detail the customer's complaint..."
+                  required
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setStoreDisputeModalOrder(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-700 text-slate-300 font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold shadow-md shadow-rose-600/30"
+                >
+                  Submit Dispute to Manager
                 </button>
               </div>
             </form>

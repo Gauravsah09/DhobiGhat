@@ -505,6 +505,7 @@ export const initialOrders: Order[] = [
       bagCount: 1,
       riderWeightKg: 2.8,
       storeVerifiedWeightKg: 2.8,
+      riderPhotoEvidence: "https://images.unsplash.com/photo-1545173168-9f1947eebb7f?w=600",
       mismatchResolved: true,
     },
   },

@@ -445,7 +445,20 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
         } catch {}
       }
       setLoggedStaffId(null);
-      localStorage.setItem(STORAGE_KEYS.CURRENT_STAFF_ID, 'none');
+      try {
+        localStorage.setItem(STORAGE_KEYS.CURRENT_STAFF_ID, 'none');
+        sessionStorage.clear();
+        if (typeof document !== 'undefined') {
+          document.cookie = '__Host-dhobighat_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0; Secure; SameSite=Strict;';
+          document.cookie = 'dhobighat_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
+        }
+        if (typeof window !== 'undefined' && 'caches' in window) {
+          caches.keys().then((names) => {
+            names.forEach((name) => caches.delete(name));
+          }).catch(() => {});
+        }
+        fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+      } catch {}
     },
     hasRole: (allowedRoles: (StoreOperatorRole | string)[]) => {
       if (!currentStaffUser) return false;
@@ -477,7 +490,20 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     },
     logoutAdmin: () => {
       setLoggedAdminId(null);
-      localStorage.removeItem(STORAGE_KEYS.CURRENT_ADMIN_ID);
+      try {
+        localStorage.removeItem(STORAGE_KEYS.CURRENT_ADMIN_ID);
+        sessionStorage.clear();
+        if (typeof document !== 'undefined') {
+          document.cookie = '__Host-dhobighat_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0; Secure; SameSite=Strict;';
+          document.cookie = 'dhobighat_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
+        }
+        if (typeof window !== 'undefined' && 'caches' in window) {
+          caches.keys().then((names) => {
+            names.forEach((name) => caches.delete(name));
+          }).catch(() => {});
+        }
+        fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+      } catch {}
     },
   };
 

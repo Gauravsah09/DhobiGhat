@@ -18,9 +18,9 @@ const LEGAL_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
   ironing: ['qc_check_packed'],
   qc_check_packed: ['drop_assigned'],
   drop_assigned: ['out_for_delivery', 'drop_assigned'],
-  out_for_delivery: ['delivered'],
-  delivered: ['closed'],
-  closed: [],
+  delivered: ['closed', 'disputed'],
+  disputed: ['delivered', 'closed'],
+  closed: ['disputed'],
   cancelled: [],
 };
 

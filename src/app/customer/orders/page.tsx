@@ -62,6 +62,9 @@ function CustomerOrdersContent() {
   const [filterInv, setFilterInv] = useState(highlightInv || '');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
+  // Photo evidence preview modal state
+  const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+
   // Doorstep UPI payment modal state
   const [showUpiPayModal, setShowUpiPayModal] = useState(false);
   const [upiPayCopied, setUpiPayCopied] = useState(false);
@@ -547,6 +550,37 @@ function CustomerOrdersContent() {
                   </div>
                 </div>
 
+                {/* Disputed Notice Banner */}
+                {(selectedOrder.status === 'disputed' || selectedOrder.dispute) && (
+                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-400/30 text-amber-950 text-xs flex items-start gap-3">
+                    <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-sm text-amber-950">
+                          Dispute Under Review: {selectedOrder.dispute?.issueType ? selectedOrder.dispute.issueType.replace(/_/g, ' ').toUpperCase() : 'Investigation Active'}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-200 text-amber-900 border border-amber-300">
+                          {selectedOrder.dispute?.status ? selectedOrder.dispute.status.replace(/_/g, ' ') : 'Open'}
+                        </span>
+                      </div>
+                      <p className="text-amber-900">
+                        {selectedOrder.dispute?.description ? `"${selectedOrder.dispute.description}"` : 'Your issue report is currently being reviewed by our Store Manager.'}
+                      </p>
+                      {selectedOrder.dispute?.resolutionNotes && (
+                        <div className="mt-2 p-2.5 rounded-xl bg-white/90 border border-amber-300 text-slate-800 space-y-1">
+                          <span className="font-bold text-emerald-800 text-xs block">Store Manager Settlement:</span>
+                          <p className="text-xs text-slate-700">{selectedOrder.dispute.resolutionNotes}</p>
+                          {selectedOrder.dispute.refundAmount ? (
+                            <span className="inline-block font-extrabold text-emerald-700 text-xs bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                              Refund Credit: {formatCurrency(selectedOrder.dispute.refundAmount, settings.currency)}
+                            </span>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Cancelled Notice Banner */}
                 {selectedOrder.status === 'cancelled' && (
                   <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-start gap-3">
@@ -848,39 +882,93 @@ function CustomerOrdersContent() {
 
               {/* Rider Handover Card (if rider collected) */}
               {selectedOrder.riderHandover && (
-                <div className="bg-slate-900 text-white rounded-3xl p-6 shadow-md space-y-3">
-                  <div className="flex items-center justify-between">
+                <div className="bg-slate-900 text-white rounded-3xl p-6 shadow-md space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
                     <div className="flex items-center gap-2">
-                      <Truck className="w-4 h-4 text-sky-400" />
-                      <h4 className="font-bold text-xs uppercase tracking-wider text-sky-400">
-                        Rider Pickup Evidence
-                      </h4>
+                      <div className="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30 flex items-center justify-center">
+                        <Truck className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-xs uppercase tracking-wider text-sky-400">
+                          Doorstep Collection & Scale Weight Evidence
+                        </h4>
+                        <span className="text-[11px] text-slate-400">
+                          Collected by Rider: <strong className="text-white font-semibold">{selectedOrder.riderHandover.riderName}</strong>
+                          {selectedOrder.riderHandover.riderPhone && ` (${selectedOrder.riderHandover.riderPhone})`}
+                        </span>
+                      </div>
                     </div>
-                    <span className="text-xs text-slate-400">Rider: {selectedOrder.riderHandover.riderName}</span>
+                    <span className="self-start sm:self-auto px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-extrabold uppercase tracking-wider">
+                      ✓ Intake Verified
+                    </span>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs pt-1">
-                    <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-                      <span className="text-slate-400 block mb-0.5">Rider Weight Capture</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                    <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
+                      <span className="text-slate-400 block mb-0.5 text-[11px]">Rider Weight Scale</span>
                       <span className="font-mono font-bold text-white text-base">
                         {selectedOrder.riderHandover.riderWeightKg} Kg
                       </span>
                     </div>
 
-                    <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-                      <span className="text-slate-400 block mb-0.5">Store Verified Weight</span>
+                    <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
+                      <span className="text-slate-400 block mb-0.5 text-[11px]">Store Verified Weight</span>
                       <span className="font-mono font-bold text-emerald-400 text-base">
                         {selectedOrder.riderHandover.storeVerifiedWeightKg || selectedOrder.riderHandover.riderWeightKg} Kg
                       </span>
                     </div>
 
-                    <div className="p-3 rounded-xl bg-white/5 border border-white/10 col-span-2 sm:col-span-1">
-                      <span className="text-slate-400 block mb-0.5">Bags Handed Over</span>
+                    <div className="p-3 rounded-2xl bg-white/5 border border-white/10 col-span-2 sm:col-span-1">
+                      <span className="text-slate-400 block mb-0.5 text-[11px]">Bags & Pieces</span>
                       <span className="font-mono font-bold text-white text-base">
-                        {selectedOrder.riderHandover.bagCount} Sealed Bags
+                        {selectedOrder.riderHandover.bagCount} Bags • {selectedOrder.totalQty} Pcs
                       </span>
                     </div>
                   </div>
+
+                  {/* Rider Photo Evidence Display */}
+                  {selectedOrder.riderHandover.riderPhotoEvidence ? (
+                    <div className="pt-2 border-t border-white/10 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
+                          <Camera className="w-3.5 h-3.5 text-sky-400" />
+                          <span>Rider Doorstep Photo Proof</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewPhotoUrl(selectedOrder.riderHandover?.riderPhotoEvidence || null)}
+                          className="text-[11px] font-bold text-sky-400 hover:text-sky-300 flex items-center gap-1 hover:underline"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span>View Full Photo</span>
+                        </button>
+                      </div>
+
+                      <div 
+                        onClick={() => setPreviewPhotoUrl(selectedOrder.riderHandover?.riderPhotoEvidence || null)}
+                        className="relative group rounded-2xl overflow-hidden border border-white/15 bg-black/40 cursor-pointer max-w-sm"
+                      >
+                        <img
+                          src={selectedOrder.riderHandover.riderPhotoEvidence}
+                          alt="Rider Doorstep Intake Evidence"
+                          className="w-full h-44 object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-3">
+                          <div className="text-[10px] text-white flex items-center justify-between w-full">
+                            <span className="font-semibold">Taken at Customer Doorstep</span>
+                            <span className="font-mono font-bold text-sky-300 bg-black/60 px-2 py-0.5 rounded backdrop-blur-xs">
+                              🔍 Click to Zoom
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-2xl bg-white/5 border border-white/10 text-[11px] text-slate-400 flex items-center gap-2">
+                      <Camera className="w-4 h-4 text-slate-500 shrink-0" />
+                      <span>Rider verified physical garment intake at customer doorstep.</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1307,6 +1395,47 @@ function CustomerOrdersContent() {
                 <p className="text-[10px] text-emerald-400 font-medium">
                   ✓ Instant UPI Confirmation: Once payment is confirmed, your order is automatically marked Delivered. No handover PIN is required!
                 </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Photo Evidence Zoom Modal */}
+        {previewPhotoUrl && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+            <div className="bg-slate-900 rounded-3xl p-4 max-w-2xl w-full shadow-2xl border border-slate-700 space-y-3">
+              <div className="flex justify-between items-center px-2">
+                <div className="flex items-center gap-2 text-white font-bold text-xs">
+                  <Camera className="w-4 h-4 text-sky-400" />
+                  <span>Rider Doorstep Intake Evidence Photo</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPreviewPhotoUrl(null)}
+                  className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-sm font-bold transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="rounded-2xl overflow-hidden bg-black max-h-[70vh] flex items-center justify-center border border-slate-800">
+                <img
+                  src={previewPhotoUrl}
+                  alt="High Resolution Doorstep Pickup Proof"
+                  className="w-full h-auto max-h-[70vh] object-contain"
+                />
+              </div>
+
+              <div className="flex justify-between items-center px-2 text-xs text-slate-400">
+                <span>Verified garment physical intake with scale weight record</span>
+                <button
+                  type="button"
+                  onClick={() => window.open(previewPhotoUrl, '_blank')}
+                  className="text-sky-400 hover:text-sky-300 font-bold flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open Original</span>
+                </button>
               </div>
             </div>
           </div>

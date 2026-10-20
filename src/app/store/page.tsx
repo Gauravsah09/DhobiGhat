@@ -37,6 +37,7 @@ import {
   Sparkles,
   MapPin,
   Calendar,
+  ChevronLeft,
   ChevronRight,
   Filter,
   CheckSquare,
@@ -116,6 +117,20 @@ export default function StoreFloorApp() {
   // Online Pipeline Filter: 'all' or specific milestone
   const [onlineMilestoneFilter, setOnlineMilestoneFilter] = useState<string>('all');
   const [onlineSearch, setOnlineSearch] = useState('');
+
+  // Calendar Left Side Panel State (1-year toggle from current month)
+  const [calendarYear, setCalendarYear] = useState<number>(2026);
+  const [calendarMonth, setCalendarMonth] = useState<number>(9);
+  const [selectedBookingDate, setSelectedBookingDate] = useState<string | null>(null);
+  const [showCalendarPanel, setShowCalendarPanel] = useState<boolean>(true);
+  const [currentNow, setCurrentNow] = useState<Date | null>(null);
+
+  useEffect(() => {
+    const now = new Date();
+    setCurrentNow(now);
+    setCalendarYear(now.getFullYear());
+    setCalendarMonth(now.getMonth());
+  }, []);
 
   // Rider assignment modal state (Pickup)
   const [assignModalOrder, setAssignModalOrder] = useState<Order | null>(null);
@@ -296,7 +311,64 @@ export default function StoreFloorApp() {
     return status;
   };
 
-  // Filtered online orders list
+  // 1-year window limits (from current month to +11 months)
+  const safeNowYear = currentNow ? currentNow.getFullYear() : calendarYear;
+  const safeNowMonth = currentNow ? currentNow.getMonth() : calendarMonth;
+  const currentYearMonthVal = safeNowYear * 12 + safeNowMonth;
+  const activeYearMonthVal = calendarYear * 12 + calendarMonth;
+  const canGoPrev = activeYearMonthVal > currentYearMonthVal - 3;
+  const canGoNext = activeYearMonthVal < currentYearMonthVal + 11;
+
+  const handlePrevMonth = () => {
+    if (canGoPrev) {
+      if (calendarMonth === 0) {
+        setCalendarMonth(11);
+        setCalendarYear((y) => y - 1);
+      } else {
+        setCalendarMonth((m) => m - 1);
+      }
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (canGoNext) {
+      if (calendarMonth === 11) {
+        setCalendarMonth(0);
+        setCalendarYear((y) => y + 1);
+      } else {
+        setCalendarMonth((m) => m + 1);
+      }
+    }
+  };
+
+  const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+  const firstDayOfWeek = new Date(calendarYear, calendarMonth, 1).getDay(); // 0 = Sunday
+
+  const handleDateClick = (day: number) => {
+    const monthStr = String(calendarMonth + 1).padStart(2, '0');
+    const dayStr = String(day).padStart(2, '0');
+    const fullDate = `${calendarYear}-${monthStr}-${dayStr}`;
+    if (selectedBookingDate === fullDate) {
+      setSelectedBookingDate(null);
+    } else {
+      setSelectedBookingDate(fullDate);
+      setOnlineMilestoneFilter('order_received');
+    }
+  };
+
+  // Map of booking counts by date (YYYY-MM-DD) for calendar highlight indicators
+  const ordersBookedByDate = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const ord of onlineOrders) {
+      const d = (ord.pickupSlot?.date || ord.orderDate || '').split('T')[0];
+      if (d) {
+        map[d] = (map[d] || 0) + 1;
+      }
+    }
+    return map;
+  }, [onlineOrders]);
+
+  // Filtered online orders list (with Calendar date filter)
   const filteredOnlineOrders = onlineOrders.filter((ord) => {
     const normalized = normalizeStatus(ord.status, ord.subStage);
     const matchesFilter = onlineMilestoneFilter === 'all' || normalized === onlineMilestoneFilter;
@@ -305,7 +377,11 @@ export default function StoreFloorApp() {
       (ord.invoiceNo || '').toLowerCase().includes(searchLower) ||
       (ord.customerName || '').toLowerCase().includes(searchLower) ||
       (ord.customerPhone && ord.customerPhone.includes(onlineSearch));
-    return matchesFilter && matchesSearch;
+    
+    const ordDate = (ord.pickupSlot?.date || ord.orderDate || '').split('T')[0];
+    const matchesDate = !selectedBookingDate || ordDate === selectedBookingDate;
+
+    return matchesFilter && matchesSearch && matchesDate;
   });
 
   // Handle adding items in walk-in intake
@@ -740,8 +816,191 @@ export default function StoreFloorApp() {
               </div>
             </div>
 
-            {/* Online Orders Cards List */}
-            <div className="space-y-3">
+            {/* Main Operational Layout: Left Calendar Panel + Right Pipeline Orders */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              
+              {/* LEFT SIDE PANEL: Store One-Month Calendar Side Panel */}
+              <div className="lg:col-span-4 xl:col-span-3.5 space-y-4">
+                <div className="rounded-3xl bg-white border border-slate-200/90 p-5 shadow-xl text-slate-900 select-none">
+                  
+                  {/* Calendar Header matching user reference image: Bold Red Month, Bold Blue Year */}
+                  <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="text-2xl font-black tracking-tight text-[#DE483A] uppercase font-sans">
+                        {['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'][calendarMonth]}
+                      </span>
+                      <span className="text-2xl font-black tracking-tight text-[#2563EB] font-sans">
+                        {calendarYear}
+                      </span>
+                    </div>
+
+                    {/* 1-Year Month Toggle Navigation */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        title="Previous Month"
+                        onClick={handlePrevMonth}
+                        disabled={!canGoPrev}
+                        className="w-8 h-8 rounded-full hover:bg-slate-100 disabled:opacity-30 flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
+                      >
+                        <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
+                      </button>
+                      <button
+                        type="button"
+                        title="Next Month"
+                        onClick={handleNextMonth}
+                        disabled={!canGoNext}
+                        className="w-8 h-8 rounded-full hover:bg-slate-100 disabled:opacity-30 flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
+                      >
+                        <ChevronRight className="w-5 h-5 stroke-[2.5]" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Days of Week Header Row: SU MO TU WE TH FR SA */}
+                  <div className="grid grid-cols-7 text-center pt-3 pb-2 text-xs font-black tracking-wider">
+                    <div className="text-[#DE483A]">SU</div>
+                    <div className="text-slate-700">MO</div>
+                    <div className="text-slate-700">TU</div>
+                    <div className="text-slate-700">WE</div>
+                    <div className="text-slate-700">TH</div>
+                    <div className="text-slate-700">FR</div>
+                    <div className="text-slate-700">SA</div>
+                  </div>
+
+                  {/* Calendar Dates Grid */}
+                  <div className="grid grid-cols-7 gap-y-1 text-center text-sm font-bold">
+                    {/* Empty padding blocks */}
+                    {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+                      <div key={'empty-' + i} className="h-8 w-8" />
+                    ))}
+
+                    {/* Active Month Days */}
+                    {Array.from({ length: daysInMonth }).map((_, i) => {
+                      const day = i + 1;
+                      const isSunday = (firstDayOfWeek + i) % 7 === 0;
+                      const monthStr = String(calendarMonth + 1).padStart(2, '0');
+                      const dayStr = String(day).padStart(2, '0');
+                      const fullDateKey = calendarYear + '-' + monthStr + '-' + dayStr;
+                      const orderCount = ordersBookedByDate[fullDateKey] || 0;
+                      const isSelected = selectedBookingDate === fullDateKey;
+
+                      return (
+                        <button
+                          key={'day-' + day}
+                          type="button"
+                          onClick={() => handleDateClick(day)}
+                          title={orderCount > 0 ? (orderCount + ' customer booking(s) on ' + fullDateKey) : ('No bookings on ' + fullDateKey)}
+                          className={'h-8 w-8 mx-auto rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer ' + (
+                            isSelected
+                              ? 'bg-[#2563EB] text-white shadow-md font-black scale-105 ring-2 ring-sky-400'
+                              : orderCount > 0
+                              ? 'bg-sky-50 hover:bg-sky-100 border border-sky-300 font-extrabold'
+                              : 'hover:bg-slate-100'
+                          )}
+                        >
+                          <span className={'text-xs ' + (
+                            isSelected
+                              ? 'text-white font-black'
+                              : isSunday
+                              ? 'text-[#DE483A]'
+                              : 'text-slate-800'
+                          )}>
+                            {day}
+                          </span>
+                          
+                          {/* Booking indicator dot */}
+                          {orderCount > 0 && !isSelected && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB] absolute bottom-0.5" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Calendar Legend & Filter Status */}
+                  <div className="mt-4 pt-3 border-t border-slate-100 space-y-2 text-xs">
+                    <div className="flex items-center justify-between text-slate-500 text-[11px]">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-[#2563EB]" />
+                        <span>Dates with bookings</span>
+                      </span>
+                      <span className="font-bold text-slate-700">
+                        {Object.keys(ordersBookedByDate).filter(d => d.startsWith(calendarYear + '-' + String(calendarMonth + 1).padStart(2, '0'))).length} booking days
+                      </span>
+                    </div>
+
+                    {selectedBookingDate ? (
+                      <div className="p-2.5 rounded-2xl bg-sky-50 border border-sky-200 text-sky-900 flex items-center justify-between">
+                        <div>
+                          <span className="font-bold block text-xs">Filtered: {selectedBookingDate}</span>
+                          <span className="text-[10px] text-sky-700">
+                            Showing orders in 'Order Receive Queue'
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedBookingDate(null)}
+                          className="px-2 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-[10px] cursor-pointer"
+                        >
+                          Clear Filter
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-slate-400 text-center italic">
+                        Click any highlighted date to filter bookings for that day.
+                      </p>
+                    )}
+
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const now = new Date();
+                          setCalendarYear(now.getFullYear());
+                          setCalendarMonth(now.getMonth());
+                        }}
+                        className="text-[11px] text-[#2563EB] hover:underline font-bold cursor-pointer"
+                      >
+                        ➔ Current Month
+                      </button>
+                      {selectedBookingDate && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedBookingDate(null)}
+                          className="text-[11px] text-rose-600 hover:underline font-bold cursor-pointer"
+                        >
+                          Show All Dates
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Quick Summary Widget */}
+                <div className="rounded-3xl bg-slate-800/80 border border-slate-700/80 p-4 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-300">Queue Quick Summary</span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">Live Hub</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-center">
+                    <div className="p-2.5 rounded-2xl bg-slate-900/90 border border-slate-750">
+                      <div className="text-[10px] text-slate-400 font-sans uppercase">Total Online</div>
+                      <div className="text-lg font-black text-white">{onlineOrders.length}</div>
+                    </div>
+                    <div className="p-2.5 rounded-2xl bg-slate-900/90 border border-slate-750">
+                      <div className="text-[10px] text-slate-400 font-sans uppercase">In Receive Queue</div>
+                      <div className="text-lg font-black text-sky-400">
+                        {onlineOrders.filter(o => normalizeStatus(o.status, o.subStage) === 'order_received').length}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT MAIN PANEL: Online Orders Cards List */}
+              <div className="lg:col-span-8 xl:col-span-8.5 space-y-3">
               {lastAssignedRiderOrder && (
                 <div className="p-4 rounded-3xl bg-sky-500/10 border border-sky-500/30 text-sky-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-sky-900/20 animate-in fade-in duration-200">
                   <div className="flex items-center gap-2.5">
@@ -949,28 +1208,46 @@ export default function StoreFloorApp() {
 
                           {/* STAGE 1: ORDER RECEIVE QUEUE (Store Operator & Manager) */}
                           {(normStatus === 'order_received' || normStatus === 'booked' || normStatus === 'pending') && (
-                            currentRole === 'store_manager' || currentRole === 'store_operator' ? (
-                              <button
-                                type="button"
-                                id={`assign-rider-btn-${ord.id}`}
-                                onClick={() => {
-                                  setAssignModalOrder(ord);
-                                  const currentRider = ord.pickupBy || ord.riderHandover?.riderName;
-                                  if (currentRider) {
-                                    setSelectedRiderName(currentRider);
-                                    const matched = availableRiders.find(r => r.name === currentRider);
-                                    if (matched) setSelectedRiderPhone(matched.phone);
-                                  } else {
-                                    setSelectedRiderName(availableRiders[0]?.name || 'Mahesh Rider');
-                                    setSelectedRiderPhone(availableRiders[0]?.phone || '+91 98765 43216');
-                                  }
-                                  setSelectedSlotWindow(ord.pickupSlot?.window?.includes('Evening') ? 'Evening' : 'Morning');
-                                }}
-                                className="px-4 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-xs shadow-md shadow-sky-600/25 flex items-center gap-1.5 transition-all hover:scale-[1.02]"
-                              >
-                                <Truck className="w-3.5 h-3.5" />
-                                <span>Assign Pickup Rider ➔ Move to Pickup Assigned</span>
-                              </button>
+                            (currentRole === 'store_manager' || currentRole === 'store_operator') ? (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  type="button"
+                                  id={`quick-assign-btn-${ord.id}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const defaultRider = availableRiders[0]?.name || 'Mahesh Rider';
+                                    const defaultPhone = availableRiders[0]?.phone || '+91 98765 43216';
+                                    const defaultSlot = ord.pickupSlot?.window?.includes('Evening') ? 'Evening' : 'Morning';
+                                    assignPickupRider(ord.id, defaultRider, defaultPhone, defaultSlot);
+                                    advanceOnlinePipeline(ord.id, 'pickup_assigned');
+                                  }}
+                                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-xs shadow-md shadow-sky-600/25 flex items-center gap-1.5 transition-all cursor-pointer"
+                                  title="1-Click: Automatically assign default rider and advance"
+                                >
+                                  <Truck className="w-3.5 h-3.5" />
+                                  <span>Move to Pickup Assigned (1-Click)</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  id={`assign-rider-btn-${ord.id}`}
+                                  onClick={() => {
+                                    setAssignModalOrder(ord);
+                                    const currentRider = ord.pickupBy || ord.riderHandover?.riderName;
+                                    if (currentRider) {
+                                      setSelectedRiderName(currentRider);
+                                      const matched = availableRiders.find(r => r.name === currentRider);
+                                      if (matched) setSelectedRiderPhone(matched.phone);
+                                    } else {
+                                      setSelectedRiderName(availableRiders[0]?.name || 'Mahesh Rider');
+                                      setSelectedRiderPhone(availableRiders[0]?.phone || '+91 98765 43216');
+                                    }
+                                    setSelectedSlotWindow(ord.pickupSlot?.window?.includes('Evening') ? 'Evening' : 'Morning');
+                                  }}
+                                  className="px-3 py-2 rounded-xl bg-slate-750 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center gap-1.5 border border-slate-650 cursor-pointer"
+                                >
+                                  <span>Customize Rider</span>
+                                </button>
+                              </div>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
                                 🔒 Requires Store Operator or Manager
@@ -1051,20 +1328,40 @@ export default function StoreFloorApp() {
                               )}
 
                               {(currentRole === 'store_manager' || currentRole === 'rider') ? (
-                                <button
-                                  type="button"
-                                  id={`rider-collected-btn-${ord.id}`}
-                                  onClick={() => {
-                                    setWeightModalOrder(ord);
-                                    setHandoverPieces(ord.totalQty.toString());
-                                    setHandoverWeight((ord.recordedWeightKg || 3.0).toString());
-                                    setHandoverPhoto(ord.riderHandover?.riderPhotoEvidence || '');
-                                  }}
-                                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-amber-600/30"
-                                >
-                                  <Scale className="w-3.5 h-3.5" />
-                                  <span>Collect Clothes & Upload Photo Proof (Mark Picked-Up)</span>
-                                </button>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <button
+                                    type="button"
+                                    id={`quick-pickup-btn-${ord.id}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      reconcileRiderPickup(ord.id, {
+                                        riderWeightKg: ord.recordedWeightKg || 3.0,
+                                        bagCount: ord.totalQty || 1,
+                                        storeVerifiedWeightKg: ord.recordedWeightKg || 3.0,
+                                        mismatchResolved: true,
+                                      });
+                                      advanceOnlinePipeline(ord.id, 'picked_up');
+                                    }}
+                                    className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-amber-600/30 cursor-pointer"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>Mark Picked-Up (1-Click)</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    id={`rider-collected-btn-${ord.id}`}
+                                    onClick={() => {
+                                      setWeightModalOrder(ord);
+                                      setHandoverPieces(ord.totalQty.toString());
+                                      setHandoverWeight((ord.recordedWeightKg || 3.0).toString());
+                                      setHandoverPhoto(ord.riderHandover?.riderPhotoEvidence || '');
+                                    }}
+                                    className="px-3 py-2 rounded-xl bg-slate-750 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center gap-1.5 border border-slate-650 cursor-pointer"
+                                  >
+                                    <Scale className="w-3.5 h-3.5 text-amber-400" />
+                                    <span>Photo & Scale Weight</span>
+                                  </button>
+                                </div>
                               ) : (
                                 <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
                                   🔒 Requires Rider to collect & weigh clothes at customer doorstep
@@ -1209,18 +1506,32 @@ export default function StoreFloorApp() {
                               )}
 
                               {(currentRole === 'store_manager' || currentRole === 'store_operator') ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setDropModalOrder(ord);
-                                    if (ord.dropRiderName) setDropRiderName(ord.dropRiderName);
-                                    if (ord.dropSlotWindow) setDropSlotWindow(ord.dropSlotWindow);
-                                  }}
-                                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
-                                >
-                                  <Truck className="w-3.5 h-3.5" />
-                                  <span>Assign Drop Rider ➔ Move to Drop Assigned</span>
-                                </button>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <button
+                                    type="button"
+                                    id={`quick-drop-btn-${ord.id}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      assignDropRider(ord.id, 'Mahesh Rider', '+91 98765 43216', 'Morning (07:00 AM - 10:00 AM)');
+                                      advanceOnlinePipeline(ord.id, 'drop_assigned');
+                                    }}
+                                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-purple-600/30 cursor-pointer"
+                                  >
+                                    <Truck className="w-3.5 h-3.5" />
+                                    <span>Move to Drop Assigned (1-Click)</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDropModalOrder(ord);
+                                      if (ord.dropRiderName) setDropRiderName(ord.dropRiderName);
+                                      if (ord.dropSlotWindow) setDropSlotWindow(ord.dropSlotWindow);
+                                    }}
+                                    className="px-3 py-2 rounded-xl bg-slate-750 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center gap-1.5 border border-slate-650 cursor-pointer"
+                                  >
+                                    <span>Customize Drop Rider</span>
+                                  </button>
+                                </div>
                               ) : (
                                 <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
                                   🔒 Requires Store Operator or Manager to Assign Drop Rider
@@ -1268,22 +1579,36 @@ export default function StoreFloorApp() {
 
                           {/* STAGE: OUT FOR DELIVERY (Rider collects UPI/Cash & verifies PIN) */}
                           {normStatus === 'out_for_delivery' && (
-                            currentRole === 'store_manager' || currentRole === 'rider' ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setHandoverModalOrder(ord);
-                                  setHandoverInputPin('');
-                                  setHandoverError('');
-                                  setHandoverSuccessMsg('');
-                                  setHandoverPaymentMethod(ord.paymentMethod === 'cod_cash' ? 'cash' : 'upi');
-                                  setHandoverUpiRef(`UPI/${Date.now().toString().slice(-8)}/RIDER`);
-                                }}
-                                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/30 transition-all"
-                              >
-                                <KeyRound className="w-3.5 h-3.5" />
-                                <span>Take Payment (UPI/Cash) & Complete Delivery</span>
-                              </button>
+                            (currentRole === 'store_manager' || currentRole === 'rider') ? (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  type="button"
+                                  id={`quick-deliver-btn-${ord.id}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    advanceOnlinePipeline(ord.id, 'delivered');
+                                  }}
+                                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/30 cursor-pointer"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Complete Delivery (1-Click)</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setHandoverModalOrder(ord);
+                                    setHandoverInputPin('');
+                                    setHandoverError('');
+                                    setHandoverSuccessMsg('');
+                                    setHandoverPaymentMethod(ord.paymentMethod === 'cod_cash' ? 'cash' : 'upi');
+                                    setHandoverUpiRef(`UPI/${Date.now().toString().slice(-8)}/RIDER`);
+                                  }}
+                                  className="px-3 py-2 rounded-xl bg-slate-750 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center gap-1.5 border border-slate-650 cursor-pointer"
+                                >
+                                  <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                                  <span>Verify PIN & Collect Payment</span>
+                                </button>
+                              </div>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
                                 🔒 Requires Delivery Rider (Payment & Delivery Handover)
@@ -1357,8 +1682,8 @@ export default function StoreFloorApp() {
                   );
                 })
               )}
+</div>
             </div>
-
           </div>
         )}
 

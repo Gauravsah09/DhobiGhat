@@ -173,55 +173,66 @@ export async function POST(req: NextRequest) {
     const grandTotal = Math.max(0, subtotal + gstAmount - discountAmount);
     const totalQty = validatedItems.reduce((acc: number, it: any) => acc + it.quantity, 0);
 
-    // 2. Generate Cryptographically Secure 4-Digit Delivery PIN
-    const rawDeliveryPin = Math.floor(1000 + Math.random() * 9000).toString();
+    // 2. Determine Channel and Status
+    const isWalkin = body.orderChannel === 'walk_in' || channel === 'walk_in' || channel === 'walkin_pos';
+    const effectiveChannel = isWalkin ? 'walk_in' : 'online';
+    const effectiveStatus: OrderStatus = body.status || (isWalkin ? 'received' : 'order_received');
 
-    // 3. Generate Sequential Monotonic Invoice Number
+    // 3. Generate Cryptographically Secure 4-Digit Delivery PIN
+    const rawDeliveryPin = body.deliveryPin || Math.floor(1000 + Math.random() * 9000).toString();
+
+    // 4. Generate Sequential Monotonic Invoice Number
     const existingOrders = getSharedOrders();
     const highestNum = existingOrders.reduce((max, o) => {
-      const match = o.invoiceNo.match(/IND-(\d+)/);
+      const match = (o.invoiceNo || '').match(/IND-(\d+)/);
       return match ? Math.max(max, parseInt(match[1], 10)) : max;
     }, 2400);
-    const nextInvoiceNo = `IND-${highestNum + 1}`;
+    const nextInvoiceNo = body.invoiceNo || (isWalkin ? `WLK-${highestNum + 1}` : `IND-${highestNum + 1}`);
 
-    const newOrderId = `ord-${Date.now()}`;
+    const newOrderId = body.id || `ord-${Date.now()}`;
     setOrderPinHash(newOrderId, rawDeliveryPin);
 
     const nowIso = new Date().toISOString();
     const newOrder: Order = {
       id: newOrderId,
       invoiceNo: nextInvoiceNo,
-      orderChannel: channel === 'walk_in' || channel === 'walkin_pos' ? 'walk_in' : 'online',
-      status: 'order_received',
-      subStage: 'sorting',
-      customerId: `cust-${Date.now()}`,
+      orderChannel: effectiveChannel,
+      status: effectiveStatus,
+      subStage: body.subStage || (isWalkin ? 'received' : 'sorting'),
+      customerId: body.customerId || `cust-${Date.now()}`,
       customerName,
       customerPhone,
-      pickupAddress,
-      orderDate: nowIso.split('T')[0],
+      pickupAddress: isWalkin ? undefined : pickupAddress,
+      orderDate: body.orderDate || nowIso.split('T')[0],
+      deliveryDate: body.deliveryDate,
+      pickupSlot: body.pickupSlot,
       items: validatedItems,
       totalQty,
-      recordedWeightKg: 0,
+      recordedWeightKg: Number(body.recordedWeightKg) || 0,
       subtotal,
-      discountPct: 0,
+      discountPct: Number(body.discountPct) || 0,
       discountAmount,
+      deliveryFee: Number(body.deliveryFee) || 0,
       gstRate,
       gstAmount,
-      grandTotal,
-      paidAmount: paymentMethod === 'online_upi' || paymentMethod === 'online' ? grandTotal : 0,
-      paymentMethod: (paymentMethod as any) || 'cod',
-      paymentStatus: paymentMethod === 'online_upi' || paymentMethod === 'online' ? 'paid' : 'pending',
+      grandTotal: body.grandTotal !== undefined ? Number(body.grandTotal) : grandTotal,
+      paidAmount: body.paidAmount !== undefined ? Number(body.paidAmount) : (isWalkin || paymentMethod === 'online_upi' || paymentMethod === 'online' ? grandTotal : 0),
+      balanceAmount: body.balanceAmount !== undefined ? Number(body.balanceAmount) : 0,
+      paymentMethod: (paymentMethod as any) || (isWalkin ? 'bycash' : 'cod'),
+      paymentStatus: body.paymentStatus || (isWalkin || paymentMethod === 'online_upi' || paymentMethod === 'online' ? 'paid' : 'pending'),
       deliveryPin: rawDeliveryPin,
-      stageHistory: [
+      posDetails: body.posDetails,
+      upiTransactionRef: body.upiTransactionRef,
+      stageHistory: body.stageHistory || [
         {
-          stage: 'order_received',
-          label: 'Order Placed',
+          stage: effectiveStatus,
+          label: isWalkin ? 'Walk-in Counter Intake' : 'Order Placed',
           timestamp: nowIso,
-          actorName: 'Customer Self-Booking',
-          notes: `Booking placed via ${channel}. Total items: ${validatedItems.length}`,
+          actorName: isWalkin ? 'Store Floor Operator' : 'Customer Self-Booking',
+          notes: notes || `Booking placed via ${effectiveChannel}. Total items: ${validatedItems.length}`,
         },
       ],
-      remarks: notes,
+      remarks: body.remarks || notes,
     };
 
     setSharedOrders([newOrder, ...existingOrders]);

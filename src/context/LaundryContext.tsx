@@ -185,6 +185,7 @@ const STORAGE_KEYS = {
   CURRENT_ADMIN_ID: 'lms_ind_auth_admin_id_v3',
   INVENTORY: 'lms_ind_inventory_v3',
   MACHINES: 'lms_ind_machines_v3',
+  ORDERS: 'lms_ind_orders_v7',
 };
 
 export function LaundryProvider({ children }: { children: React.ReactNode }) {
@@ -207,9 +208,9 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
   const [dltTemplates] = useState<DLTSmsTemplate[]>(initialDLTTemplates);
   const [expenses, setExpenses] = useState<any[]>([]);
 
-  // Active Sessions - Default to staff-2 (Ramesh Sharma, Store Operator)
+  // Active Sessions - Auth state hydrated dynamically
   const [loggedCustomerPhone, setLoggedCustomerPhone] = useState<string | null>(null);
-  const [loggedStaffId, setLoggedStaffId] = useState<string | null>('staff-2');
+  const [loggedStaffId, setLoggedStaffId] = useState<string | null>(null);
   const [loggedAdminId, setLoggedAdminId] = useState<string | null>(null);
 
   // Offline Sync State
@@ -267,12 +268,20 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       if (sMachines) setMachines(JSON.parse(sMachines));
 
       const sStaffId = localStorage.getItem(STORAGE_KEYS.CURRENT_STAFF_ID);
-      if (sStaffId === 'none') {
+      if (sStaffId === 'none' || !sStaffId) {
         setLoggedStaffId(null);
-      } else if (sStaffId) {
-        setLoggedStaffId(sStaffId);
       } else {
-        setLoggedStaffId('staff-2');
+        setLoggedStaffId(sStaffId);
+      }
+
+      const sOrders = localStorage.getItem(STORAGE_KEYS.ORDERS);
+      if (sOrders) {
+        try {
+          const parsedOrders = JSON.parse(sOrders);
+          if (Array.isArray(parsedOrders) && parsedOrders.length > 0) {
+            setOrders(parsedOrders);
+          }
+        } catch {}
       }
 
       const sAdminId = localStorage.getItem(STORAGE_KEYS.CURRENT_ADMIN_ID);
@@ -597,18 +606,30 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       const matched = staffList.find((s) => s.phone.replace(/\D/g, '') === cleanPhone && s.pin === pin);
       if (matched) {
         const store = branches.find((b) => b.id === storeId);
-        const updatedStaff: StoreStaff = {
-          ...matched,
-          storeId: storeId || matched.storeId,
-          storeName: store?.name || matched.storeName,
-          activeShift: shift || matched.activeShift || 'morning',
-          isCheckedIn: true,
-        };
-        const updatedList = staffList.map((s) => (s.id === matched.id ? updatedStaff : s));
+        const updatedList = staffList.map((s) => ({
+          ...s,
+          isCheckedIn: s.id === matched.id,
+          ...(s.id === matched.id ? {
+            storeId: storeId || matched.storeId,
+            storeName: store?.name || matched.storeName,
+            activeShift: shift || matched.activeShift || 'morning',
+          } : {}),
+        }));
         setStaffList(updatedList);
-        setLoggedStaffId(updatedStaff.id);
+        setLoggedStaffId(matched.id);
         localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(updatedList));
-        localStorage.setItem(STORAGE_KEYS.CURRENT_STAFF_ID, updatedStaff.id);
+        localStorage.setItem(STORAGE_KEYS.CURRENT_STAFF_ID, matched.id);
+        try {
+          sessionStorage.setItem('dhobighat_logged_staff_id', matched.id);
+          if (typeof document !== 'undefined') {
+            document.cookie = `dhobighat_staff_session=${matched.id}; Path=/; SameSite=Strict;`;
+          }
+        } catch {}
+        fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'staff', phone: matched.phone, staffId: matched.id, role: matched.role }),
+        }).catch(() => {});
         return true;
       }
       return false;
@@ -815,14 +836,17 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     setOrders((prev) => {
       const updated = [newOrder, ...prev];
       broadcastOrders(updated);
+      try {
+        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
+      } catch {}
       return updated;
     });
 
-    // Asynchronously notify Backend API & trigger FCM push alert
+    // Asynchronously notify Backend API with full order object
     fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(orderData),
+      body: JSON.stringify(newOrder),
     }).catch(() => {});
 
     // Update customer total count
@@ -841,8 +865,8 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     const effectiveStage = subStage || status;
     const label = getStageLabel(effectiveStage);
 
-    setOrders((prev) =>
-      prev.map((o) => {
+    setOrders((prev) => {
+      const updated = prev.map((o) => {
         if (o.id === orderId) {
           const newTimestamps = { ...(o.stageTimestamps || {}), [status]: now };
           if (subStage) newTimestamps[subStage] = now;
@@ -868,8 +892,18 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
           };
         }
         return o;
-      })
-    );
+      });
+      broadcastOrders(updated);
+      try {
+        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
+      } catch {}
+      fetch(`/api/orders/${orderId}/stage`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetStatus: status, subStage }),
+      }).catch(() => {});
+      return updated;
+    });
   };
 
   const advanceOnlinePipeline = (orderId: string, targetStatus: OrderStatus) => {
@@ -910,6 +944,9 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
         return o;
       });
       broadcastOrders(updated);
+      try {
+        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
+      } catch {}
       // Notify backend state machine API
       fetch(`/api/orders/${orderId}/stage`, {
         method: 'PATCH',
@@ -1062,8 +1099,8 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
 
   const rescheduleOrder = (orderId: string, newDate: string, newSlot: string) => {
     const now = new Date().toISOString();
-    setOrders((prev) =>
-      prev.map((o) => {
+    setOrders((prev) => {
+      const updated = prev.map((o) => {
         if (o.id === orderId) {
           const newStatus = o.status === 'out_for_pickup' ? 'pickup_assigned' : o.status;
           const newTimestamps = { ...(o.stageTimestamps || {}), [newStatus]: now };
@@ -1080,6 +1117,7 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
           ];
           return {
             ...o,
+            orderDate: newDate,
             pickupSlot: {
               date: newDate,
               window: newSlot as any,
@@ -1093,8 +1131,23 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
           };
         }
         return o;
-      })
-    );
+      });
+      broadcastOrders(updated);
+      try {
+        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
+      } catch {}
+      fetch(`/api/orders/${orderId}/stage`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderDate: newDate,
+          pickupSlot: { date: newDate, window: newSlot },
+          rescheduledAt: now,
+          notes: `Pickup moved to ${newDate} (${newSlot})`,
+        }),
+      }).catch(() => {});
+      return updated;
+    });
   };
 
   const advanceProcessingSubStage = (orderId: string, nextStage: ProcessingSubStage) => {

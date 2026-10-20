@@ -4,24 +4,32 @@ import { OrderStatus, ProcessingSubStage, StageTimestampRecord } from '@/types';
 import { notifyCustomerStageUpdate } from '@/lib/fcm';
 import { getRequestSession } from '@/lib/auth-server';
 
-// Strict 14-Stage Logistics State Machine Transition Map
+// Comprehensive Logistics State Machine Transition Map
 const LEGAL_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
-  order_received: ['pickup_assigned', 'cancelled'],
+  order_received: ['pickup_assigned', 'cancelled', 'out_for_pickup'],
+  booked: ['pickup_assigned', 'order_received', 'cancelled'],
+  pending: ['pickup_assigned', 'order_received', 'cancelled'],
   pickup_assigned: ['out_for_pickup', 'pickup_assigned', 'cancelled'],
   out_for_pickup: ['picked_up', 'pickup_assigned', 'cancelled'],
-  picked_up: ['reached_store'],
-  reached_store: ['received'],
-  received: ['sorting'],
-  sorting: ['washing'],
-  washing: ['drying'],
-  drying: ['ironing'],
-  ironing: ['qc_check_packed'],
-  qc_check_packed: ['drop_assigned'],
-  drop_assigned: ['out_for_delivery', 'drop_assigned'],
+  picked_up: ['reached_store', 'received'],
+  reached_store: ['received', 'sorting'],
+  received_at_store: ['received', 'sorting'],
+  received: ['sorting', 'washing'],
+  sorting: ['washing', 'drying'],
+  washing: ['drying', 'ironing'],
+  drying: ['ironing', 'qc_check_packed'],
+  ironing: ['qc_check_packed', 'ready', 'packed_ready'],
+  processing: ['sorting', 'washing', 'drying', 'ironing', 'qc_check_packed', 'ready'],
+  qc_check_packed: ['drop_assigned', 'out_for_delivery', 'delivered', 'closed'],
+  qc_check: ['qc_check_packed', 'drop_assigned', 'out_for_delivery', 'delivered'],
+  packed_ready: ['drop_assigned', 'out_for_delivery', 'delivered'],
+  ready: ['drop_assigned', 'out_for_delivery', 'delivered'],
+  drop_assigned: ['out_for_delivery', 'drop_assigned', 'delivered'],
+  out_for_delivery: ['delivered', 'closed', 'disputed'],
   delivered: ['closed', 'disputed', 'manual_settlement'],
+  closed: ['disputed', 'manual_settlement'],
   disputed: ['delivered', 'closed', 'manual_settlement'],
   manual_settlement: ['closed'],
-  closed: ['disputed', 'manual_settlement'],
   cancelled: ['manual_settlement'],
 };
 
@@ -47,8 +55,9 @@ export async function PATCH(
     const currentOrder = orders[index];
     const currentStatus = currentOrder.status;
 
-    // 1. Verify Legal State Transition (Admin can manually settle from any stage)
-    if (targetStatus && targetStatus !== currentStatus) {
+    // 1. Verify Legal State Transition (Admin HQ or Store Manager can bypass rigid transitions)
+    const isManagerOrAdmin = session?.role === 'store_manager' || session?.role === 'manager' || session?.role === 'admin' || session?.role === 'super_admin';
+    if (targetStatus && targetStatus !== currentStatus && !isManagerOrAdmin) {
       const allowedNext = LEGAL_TRANSITIONS[currentStatus] || [];
       const isManualSettlement = targetStatus === 'manual_settlement';
       if (!isManualSettlement && !allowedNext.includes(targetStatus)) {
@@ -82,7 +91,16 @@ export async function PATCH(
       subStage: nextSubStage,
       totalQty: bagPieceCount !== undefined ? Number(bagPieceCount) : currentOrder.totalQty,
       recordedWeightKg: bagGrossWeightKg !== undefined ? Number(bagGrossWeightKg) : currentOrder.recordedWeightKg,
+      orderDate: body.orderDate || currentOrder.orderDate,
+      pickupSlot: body.pickupSlot || currentOrder.pickupSlot,
+      rescheduledAt: body.rescheduledAt || currentOrder.rescheduledAt,
+      remarks: body.remarks || (notes ? `${currentOrder.remarks ? currentOrder.remarks + ' | ' : ''}${notes}` : currentOrder.remarks),
       stageHistory: [...(currentOrder.stageHistory || []), newStageRecord],
+      lastStageUpdatedAt: nowIso,
+      stageTimestamps: {
+        ...(currentOrder.stageTimestamps || {}),
+        [nextStatus]: nowIso,
+      },
     };
 
     const newOrders = [...orders];
@@ -108,4 +126,3 @@ export async function PATCH(
 }
 
 export const POST = PATCH;
-

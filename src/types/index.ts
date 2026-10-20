@@ -188,6 +188,7 @@ export interface Order {
   customerId: string;
   customerName: string;
   customerPhone?: string;
+  customerEmail?: string;
   pickupAddress?: IndianAddress;
   orderDate: string;
   pickupSlot?: {

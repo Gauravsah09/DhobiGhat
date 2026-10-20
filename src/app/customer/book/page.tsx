@@ -335,13 +335,20 @@ function CustomerBookingContent() {
       ? delivDate.toISOString().split('T')[0]
       : new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
 
+    const userPhone10 = (user?.phone || '').replace(/\D/g, '').slice(-10);
+    const enteredPhone10 = custPhone.replace(/\D/g, '').slice(-10);
+    const finalPhone = enteredPhone10 || userPhone10 || custPhone;
+    const finalCustomerId = user?.id || (userPhone10 ? `cust-${userPhone10}` : (enteredPhone10 ? `guest-${enteredPhone10}` : `cust-${Date.now()}`));
+    const finalCustomerName = (custName || (user ? `${user.firstName} ${user.lastName}`.trim() : 'Valued Customer')).trim();
+
     const newOrder = createOrder({
       status: 'booked',
       storeId: branches[0]?.id || 'branch-blr-1',
       storeName: branches[0]?.name || 'Bengaluru - Indiranagar Flagship',
-      customerId: user?.id || `guest-${custPhone}`,
-      customerName: custName,
-      customerPhone: custPhone,
+      customerId: finalCustomerId,
+      customerName: finalCustomerName,
+      customerPhone: finalPhone,
+      customerEmail: user?.email,
       pickupAddress: currentAddress,
       orderDate: new Date().toISOString().split('T')[0],
       pickupSlot: {

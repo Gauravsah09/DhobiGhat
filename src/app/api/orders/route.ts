@@ -202,12 +202,15 @@ export async function POST(req: NextRequest) {
       customerId: body.customerId || `cust-${Date.now()}`,
       customerName,
       customerPhone,
+      customerEmail: body.customerEmail || undefined,
       pickupAddress: isWalkin ? undefined : pickupAddress,
       orderDate: body.orderDate || nowIso.split('T')[0],
       deliveryDate: body.deliveryDate,
       pickupSlot: body.pickupSlot,
       items: validatedItems,
       totalQty,
+      isPerKgOrder: body.isPerKgOrder !== undefined ? !!body.isPerKgOrder : undefined,
+      perKgRate: body.perKgRate !== undefined ? Number(body.perKgRate) : undefined,
       recordedWeightKg: Number(body.recordedWeightKg) || 0,
       subtotal,
       discountPct: Number(body.discountPct) || 0,
@@ -235,7 +238,8 @@ export async function POST(req: NextRequest) {
       remarks: body.remarks || notes,
     };
 
-    setSharedOrders([newOrder, ...existingOrders]);
+    const filteredExisting = existingOrders.filter((o) => o.id !== newOrderId && o.invoiceNo !== nextInvoiceNo);
+    setSharedOrders([newOrder, ...filteredExisting]);
 
     // Send background FCM push alert
     notifyNewOrderIncoming(nextInvoiceNo, newOrder.totalQty).catch(() => {});

@@ -96,8 +96,18 @@ export default function CustomerAccountPage() {
   };
 
   // Disputes raised by this user
+  const userPhone10 = (user?.phone || '').replace(/\D/g, '').slice(-10);
   const userDisputes = orders
-    .filter((o) => (o.customerId === user.id || o.customerPhone === user.phone) && o.dispute)
+    .filter((o) => {
+      if (!o || !o.dispute) return false;
+      if (o.customerId && (o.customerId === user.id || o.customerId === `cust-${userPhone10}` || o.customerId === `guest-${userPhone10}`)) {
+        return true;
+      }
+      const ordPhone10 = (o.customerPhone || '').replace(/\D/g, '').slice(-10);
+      if (userPhone10.length === 10 && userPhone10 === ordPhone10) return true;
+      if (user.email && o.customerEmail && user.email.toLowerCase() === o.customerEmail.toLowerCase()) return true;
+      return false;
+    })
     .map((o) => o.dispute!);
 
   return (

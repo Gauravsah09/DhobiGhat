@@ -55,7 +55,8 @@ function CustomerOrdersContent() {
     settleDeliveryUpiPayment,
     cancelOrder, 
     rescheduleOrder, 
-    settings 
+    settings,
+    isLoaded
   } = useLaundry();
   const { user, isLoggedIn } = customerSession;
 
@@ -92,8 +93,25 @@ function CustomerOrdersContent() {
   const [feedbackText, setFeedbackText] = useState('');
 
   // Filter orders strictly: only authenticated customer orders. Zero leaks for unauthenticated visitors!
+  const userPhone10 = (user?.phone || '').replace(/\D/g, '').slice(-10);
   const userOrders = (user && isLoggedIn)
-    ? orders.filter((o) => o.customerId === user.id || (user.phone && (o.customerPhone || '').replace(/\D/g, '').endsWith(user.phone.replace(/\D/g, ''))))
+    ? orders.filter((o) => {
+        if (!o) return false;
+        // Direct ID match (supports user.id and phone-derived IDs)
+        if (o.customerId && (o.customerId === user.id || o.customerId === `cust-${userPhone10}` || o.customerId === `guest-${userPhone10}`)) {
+          return true;
+        }
+        // Normalized 10-digit phone match (covers +91, 0, or raw 10-digit variations)
+        const orderPhone10 = (o.customerPhone || '').replace(/\D/g, '').slice(-10);
+        if (userPhone10.length === 10 && userPhone10 === orderPhone10) {
+          return true;
+        }
+        // Email match
+        if (user.email && o.customerEmail && user.email.toLowerCase() === o.customerEmail.toLowerCase()) {
+          return true;
+        }
+        return false;
+      })
     : [];
 
   // Helper to extract recorded timestamp for each milestone step
@@ -159,14 +177,14 @@ function CustomerOrdersContent() {
       if (found) {
         setSelectedOrderId(found.id);
         setAccessDeniedMessage(null);
-      } else {
+      } else if (isLoaded) {
         setAccessDeniedMessage(`Invoice #${cleanInv} was not found or is not associated with your account.`);
         if (userOrders.length > 0 && !selectedOrderId) setSelectedOrderId(userOrders[0].id);
       }
     } else if (userOrders.length > 0 && !selectedOrderId) {
       setSelectedOrderId(userOrders[0].id);
     }
-  }, [rawHighlightInv, userOrders, user, isLoggedIn, selectedOrderId]);
+  }, [rawHighlightInv, userOrders, user, isLoggedIn, isLoaded, selectedOrderId]);
 
   // Selected order MUST be an order belonging to the current user!
   const selectedOrder = (selectedOrderId ? userOrders.find((o) => o.id === selectedOrderId) : null) || userOrders[0] || null;
@@ -272,6 +290,21 @@ function CustomerOrdersContent() {
     rateOrder(selectedOrder.id, userRating, feedbackText);
     alert('Thank you for rating DhobiGhat India!');
   };
+
+  // Loading state while session & orders hydrate
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+        <CustomerNavbar />
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-24 flex flex-col items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-slate-500">
+            <div className="w-10 h-10 border-4 border-sky-600 border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs font-bold text-slate-600">Loading your orders...</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   // STRICT AUTHENTICATION GATE: Never expose orders or invoices to unauthenticated visitors
   if (!user || !isLoggedIn) {

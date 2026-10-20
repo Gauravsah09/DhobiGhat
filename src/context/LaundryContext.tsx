@@ -294,8 +294,25 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     fetch('/api/orders')
       .then((res) => res.json())
       .then((data) => {
-        if (data.success && Array.isArray(data.orders) && data.orders.length > 0) {
-          setOrders(data.orders);
+        if (data.success && Array.isArray(data.orders)) {
+          setOrders((prev) => {
+            const map = new Map<string, Order>();
+            // Add server orders
+            data.orders.forEach((o: Order) => {
+              if (o && o.id) map.set(o.id, o);
+            });
+            // Keep local orders that might not be on server yet
+            prev.forEach((o: Order) => {
+              if (o && o.id && !map.has(o.id)) {
+                map.set(o.id, o);
+              }
+            });
+            const merged = Array.from(map.values());
+            try {
+              localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(merged));
+            } catch {}
+            return merged;
+          });
         }
       })
       .catch((err) => {
@@ -834,7 +851,8 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     };
 
     setOrders((prev) => {
-      const updated = [newOrder, ...prev];
+      const filtered = prev.filter((o) => o.id !== newOrder.id && o.invoiceNo !== newOrder.invoiceNo);
+      const updated = [newOrder, ...filtered];
       broadcastOrders(updated);
       try {
         localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));

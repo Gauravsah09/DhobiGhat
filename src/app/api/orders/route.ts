@@ -181,15 +181,27 @@ export async function POST(req: NextRequest) {
     // 3. Generate Cryptographically Secure 4-Digit Delivery PIN
     const rawDeliveryPin = body.deliveryPin || Math.floor(1000 + Math.random() * 9000).toString();
 
-    // 4. Generate Sequential Monotonic Invoice Number
+    // 4. Generate Sequential Monotonic Invoice Number based on Channel
     const existingOrders = getSharedOrders();
-    const highestNum = existingOrders.reduce((max, o) => {
-      const match = (o.invoiceNo || '').match(/IND-(\d+)/);
-      return match ? Math.max(max, parseInt(match[1], 10)) : max;
-    }, 2400);
-    const nextInvoiceNo = body.invoiceNo || (isWalkin ? `WLK-${highestNum + 1}` : `IND-${highestNum + 1}`);
+    let nextInvoiceNo = body.invoiceNo;
+    if (!nextInvoiceNo) {
+      if (isWalkin) {
+        const highestWlk = existingOrders.reduce((max, o) => {
+          const match = (o.invoiceNo || '').match(/WLK-(\d+)/);
+          return match ? Math.max(max, parseInt(match[1], 10)) : max;
+        }, 3000);
+        nextInvoiceNo = `WLK-${highestWlk + 1}`;
+      } else {
+        const highestInd = existingOrders.reduce((max, o) => {
+          const match = (o.invoiceNo || '').match(/IND-(\d+)/);
+          return match ? Math.max(max, parseInt(match[1], 10)) : max;
+        }, 2400);
+        nextInvoiceNo = `IND-${highestInd + 1}`;
+      }
+    }
 
-    const newOrderId = body.id || `ord-${Date.now()}`;
+    const idPrefix = isWalkin ? 'ord-wlk' : 'ord-onl';
+    const newOrderId = body.id || `${idPrefix}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     setOrderPinHash(newOrderId, rawDeliveryPin);
 
     const nowIso = new Date().toISOString();
@@ -253,3 +265,59 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: err.message }, { status: 500 });
   }
 }
+
+// DELETE: Admin can delete stuck orders and invoices for any user
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    let orderId = searchParams.get('id');
+    let invoiceNo = searchParams.get('invoiceNo');
+
+    // Also support JSON body if query parameters not in URL
+    if (!orderId && !invoiceNo) {
+      try {
+        const body = await req.json();
+        if (body?.id) orderId = body.id;
+        if (body?.invoiceNo) invoiceNo = body.invoiceNo;
+      } catch {}
+    }
+
+    if (!orderId && !invoiceNo) {
+      return NextResponse.json(
+        { success: false, message: 'Order ID or Invoice Number required for deletion.' },
+        { status: 400 }
+      );
+    }
+
+    const currentOrders = getSharedOrders();
+    const target = currentOrders.find(
+      (o) => (orderId && o.id === orderId) || (invoiceNo && o.invoiceNo.toLowerCase() === invoiceNo.toLowerCase())
+    );
+
+    if (!target) {
+      return NextResponse.json(
+        { success: false, message: `Order not found in ledger (ID: ${orderId || 'N/A'}, Invoice: ${invoiceNo || 'N/A'}).` },
+        { status: 404 }
+      );
+    }
+
+    // Permanently remove from shared orders
+    const remainingOrders = currentOrders.filter((o) => o.id !== target.id);
+    setSharedOrders(remainingOrders);
+
+    // Remove PIN hash
+    if (global.__DHOBIGHAT_PIN_HASHES__ && target.id in global.__DHOBIGHAT_PIN_HASHES__) {
+      delete global.__DHOBIGHAT_PIN_HASHES__[target.id];
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Order #${target.invoiceNo} successfully deleted from ledger.`,
+      deletedOrderId: target.id,
+      deletedInvoiceNo: target.invoiceNo,
+    });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
+  }
+}
+

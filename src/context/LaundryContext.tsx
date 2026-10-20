@@ -226,15 +226,23 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem('lms_ind_orders_v5');
       localStorage.removeItem('lms_ind_auth_cust_phone_v3');
 
-      // Hydrate dynamically registered customers (from signup)
+      // Hydrate dynamically registered customers (from signup) & initial accounts
       const regCustomers = localStorage.getItem('dhobighat_registered_customers_v1');
       if (regCustomers) {
         try {
           const parsed = JSON.parse(regCustomers);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setCustomers(parsed);
+            const parsedIds = new Set(parsed.map((c: any) => c.id));
+            const missing = initialCustomers.filter((ic) => !parsedIds.has(ic.id));
+            setCustomers(missing.length > 0 ? [...parsed, ...missing] : parsed);
+          } else {
+            setCustomers(initialCustomers);
           }
-        } catch {}
+        } catch {
+          setCustomers(initialCustomers);
+        }
+      } else {
+        setCustomers(initialCustomers);
       }
 
       // Check active customer session from sessionStorage
@@ -722,19 +730,33 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     },
   };
 
-  // Generate dynamic invoice # with monotonic sequencing
-  const getNextInvoiceNumber = () => {
-    let maxSeq = 2400;
-    for (const o of orders) {
-      if (o.invoiceNo) {
-        const num = parseInt(o.invoiceNo.replace(/\D/g, ''), 10);
-        if (!isNaN(num) && num > maxSeq) {
-          maxSeq = num;
+  // Generate dynamic invoice # with monotonic sequencing separated by channel
+  const getNextInvoiceNumber = (channel: OrderChannel = 'online') => {
+    if (channel === 'walk_in') {
+      let maxSeq = 3000;
+      for (const o of orders) {
+        if (o.invoiceNo && o.invoiceNo.startsWith('WLK-')) {
+          const num = parseInt(o.invoiceNo.replace(/\D/g, ''), 10);
+          if (!isNaN(num) && num > maxSeq) {
+            maxSeq = num;
+          }
         }
       }
+      return `WLK-${maxSeq + 1}`;
+    } else {
+      let maxSeq = 2400;
+      for (const o of orders) {
+        if (o.invoiceNo && o.invoiceNo.startsWith('IND-')) {
+          const num = parseInt(o.invoiceNo.replace(/\D/g, ''), 10);
+          if (!isNaN(num) && num > maxSeq) {
+            maxSeq = num;
+          }
+        }
+      }
+      return `IND-${maxSeq + 1}`;
     }
-    return `IND-${maxSeq + 1}`;
   };
+
 
   // Dynamic stage labels and actor resolution
   const getStageLabel = (stage: string): string => {
@@ -796,10 +818,10 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Order Operations
-  const createOrder = (orderData: Omit<Order, 'id' | 'invoiceNo' | 'deliveryPin'>): Order => {
-    const newInvoice = getNextInvoiceNumber();
-    const pin = Math.floor(1000 + Math.random() * 9000).toString();
+  const createOrder = (orderData: Omit<Order, 'id' | 'invoiceNo' | 'deliveryPin'> & { id?: string; invoiceNo?: string; deliveryPin?: string }): Order => {
     const channel: OrderChannel = orderData.orderChannel || (orderData.pickupAddress || orderData.pickupSlot ? 'online' : 'walk_in');
+    const newInvoice = orderData.invoiceNo || getNextInvoiceNumber(channel);
+    const pin = Math.floor(1000 + Math.random() * 9000).toString();
     const initialStatus: OrderStatus = orderData.status || (channel === 'online' ? 'order_received' : 'received');
     const now = new Date().toISOString();
     const initialLabel = channel === 'online' ? 'Order Placed (Online)' : 'Walk-in Intake (Counter)';
@@ -816,11 +838,12 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       ? Math.max(0, typeof orderData.balanceAmount === 'number' && !isNaN(orderData.balanceAmount) ? orderData.balanceAmount : 0)
       : Math.max(0, grandTotal - paidAmount);
 
+    const idPrefix = channel === 'walk_in' ? 'ord-wlk' : 'ord-onl';
     const randomSuffix = Math.random().toString(36).substring(2, 7);
 
     const newOrder: Order = {
       ...orderData,
-      id: `ord-${Date.now()}-${randomSuffix}`,
+      id: orderData.id || `${idPrefix}-${Date.now()}-${randomSuffix}`,
       invoiceNo: newInvoice,
       orderChannel: channel,
       deliveryPin: pin,
@@ -1768,34 +1791,106 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     setSettings((prev) => ({ ...prev, ...newSettings }));
   };
 
-  // Backward compatibility mock handlers
+  // Customer Accounts Management (Admin CRM)
   const addCustomer = (cust: any) => {
-    const newCust: any = {
-      id: `cust-${Date.now()}`,
-      phone: cust.phone || '9999999999',
-      firstName: cust.firstName || 'New',
-      lastName: cust.lastName || 'Customer',
-      email: cust.email || 'customer@dhobighat.in',
-      addresses: [{
-        id: `addr-${Date.now()}`,
-        label: 'Home',
-        flatNo: cust.address || 'Address',
-        society: 'Society',
-        street: 'Street',
-        city: cust.city || 'Bengaluru',
-        state: 'Karnataka',
-        pincode: '560038',
-      }],
-      walletBalance: 0,
-      joinDate: new Date().toISOString().split('T')[0],
-      status: 'enable',
-      totalOrders: 0,
+    const cleanPhone = (cust.phone || '').replace(/\D/g, '');
+    const defaultAddressId = `addr-${Date.now()}`;
+    const newCust: CustomerUser = {
+      id: cust.id || `cust-${Date.now()}`,
+      phone: cleanPhone || '9876543210',
+      firstName: (cust.firstName || 'New').trim(),
+      lastName: (cust.lastName || 'Customer').trim(),
+      email: (cust.email || `${cleanPhone || 'customer'}@dhobighat.in`).trim().toLowerCase(),
+      addresses: cust.addresses && cust.addresses.length > 0 ? cust.addresses : [
+        {
+          id: defaultAddressId,
+          tag: 'Home',
+          flatNo: cust.address || 'Flat 101, Prestige Palms',
+          street: '12th Main, HAL 2nd Stage',
+          city: cust.city || 'Bengaluru',
+          state: 'Karnataka',
+          pincode: '560038',
+          isDefault: true,
+        },
+      ],
+      defaultAddressId: cust.defaultAddressId || defaultAddressId,
+      walletBalance: Number(cust.walletBalance) || 0,
+      joinDate: cust.joinDate || new Date().toISOString().split('T')[0],
+      status: cust.status === 'disable' ? 'disable' : 'enable',
+      totalOrders: cust.totalOrders || 0,
     };
-    setCustomers((prev) => [newCust, ...prev]);
+
+    setCustomers((prev) => {
+      const updated = [newCust, ...prev];
+      try {
+        localStorage.setItem('dhobighat_registered_customers_v1', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    fetch('/api/customers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newCust),
+    }).catch(() => {});
+
     return newCust;
   };
-  const updateCustomer = (id: string, cust: any) => {};
-  const deleteCustomer = (id: string) => {};
+
+  const updateCustomer = (id: string, updates: any) => {
+    setCustomers((prev) => {
+      const updated = prev.map((c) => (c.id === id ? { ...c, ...updates } : c));
+      try {
+        localStorage.setItem('dhobighat_registered_customers_v1', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    fetch('/api/customers', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...updates }),
+    }).catch(() => {});
+  };
+
+  const deleteCustomer = (id: string) => {
+    setCustomers((prev) => {
+      const target = prev.find((c) => c.id === id);
+      const updated = prev.filter((c) => c.id !== id);
+      try {
+        localStorage.setItem('dhobighat_registered_customers_v1', JSON.stringify(updated));
+      } catch {}
+
+      // If active session belongs to this deleted customer, log them out
+      if (target && loggedCustomerPhone && target.phone.replace(/\D/g, '') === loggedCustomerPhone.replace(/\D/g, '')) {
+        setLoggedCustomerPhone(null);
+        try {
+          sessionStorage.removeItem('dhobighat_active_customer');
+        } catch {}
+      }
+
+      return updated;
+    });
+
+    fetch(`/api/customers?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }).catch(() => {});
+  };
+
+  // Order Deletion for Admin (Stuck orders and invoices)
+  const deleteOrder = (id: string) => {
+    setOrders((prev) => {
+      const remaining = prev.filter((o) => o.id !== id);
+      broadcastOrders(remaining);
+      return remaining;
+    });
+
+    // Sync deletion to server shared orders ledger
+    fetch(`/api/orders?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }).catch(() => {});
+  };
+
   const addClothType = (cloth: any) => cloth;
   const updateClothType = (id: string, cloth: any) => {};
   const deleteClothType = (id: string) => {};
@@ -1805,9 +1900,6 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
   const addPriceItem = (item: any) => item;
   const updatePriceItem = (id: string, item: any) => {};
   const deletePriceItem = (id: string) => {};
-  const deleteOrder = (id: string) => {
-    setOrders((prev) => prev.filter((o) => o.id !== id));
-  };
   const addExpense = (exp: any) => exp;
   const deleteExpense = (id: string) => {};
 

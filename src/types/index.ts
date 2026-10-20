@@ -55,22 +55,24 @@ export type PaymentMethod =
   | 'wallet'
   | 'bycash' 
   | 'bycheque' 
-  | 'online';
+  | 'online'
+  | 'online_upi';
 
 export type StarchLevel = 'none' | 'light' | 'medium' | 'heavy';
 export type FoldStyle = 'hanger' | 'flat_fold' | 'roll_fold';
 
 export interface IndianAddress {
   id: string;
-  label: 'Home' | 'Work' | 'Other';
+  label?: 'Home' | 'Work' | 'Other' | string;
   flatNo: string;        // Flat/House/Plot No
-  society: string;       // Apartment / Society / Colony
+  society?: string;      // Apartment / Society / Colony
   street: string;        // Street / Road / Area
   landmark?: string;     // Nearby landmark
   city: string;          // Bengaluru, Mumbai, Delhi, etc.
   state: string;         // Karnataka, Maharashtra, Delhi, etc.
   pincode: string;       // 6-digit Indian Pincode (e.g. 560038)
   isDefault?: boolean;
+  tag?: string;          // Optional alias for label
 }
 
 export interface CustomerUser {

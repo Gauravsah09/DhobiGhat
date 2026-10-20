@@ -622,30 +622,54 @@ function CustomerOrdersContent() {
                   </div>
                 )}
 
-                {/* Delivery PIN & Slot Radar */}
+                {/* Channel-Aware Handover & Logistics Radar */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                  <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200/80 shadow-xs space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-amber-900 font-extrabold text-[11px] uppercase tracking-wider flex items-center gap-1">
-                        <KeyRound className="w-3.5 h-3.5 text-amber-600" />
-                        <span>Doorstep Handover PIN</span>
+                  {selectedOrder.orderChannel === 'walk_in' ? (
+                    <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200/80 shadow-xs space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-indigo-950 font-extrabold text-[11px] uppercase tracking-wider flex items-center gap-1">
+                          <Building className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>Store Counter Order</span>
+                        </span>
+                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-200 text-indigo-900">
+                          Walk-in
+                        </span>
+                      </div>
+                      <span className="font-bold text-sm text-indigo-950 block py-0.5 truncate">
+                        {selectedOrder.storeName || 'DhobiGhat Store Hub'}
                       </span>
-                      <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">
-                        Customer Only
-                      </span>
+                      <p className="text-[10px] text-indigo-800 leading-snug">
+                        🏪 Dropped off at counter. Collect clean garments at the same store desk once ready.
+                      </p>
                     </div>
-                    <span className="font-mono text-2xl font-black text-amber-950 tracking-widest block py-0.5">
-                      {selectedOrder.deliveryPin}
-                    </span>
-                    <p className="text-[10px] text-amber-800 leading-snug">
-                      🔒 Only you have this PIN. The delivery rider will ask you for it at your doorstep to verify handover.
-                    </p>
-                  </div>
+                  ) : (
+                    <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200/80 shadow-xs space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-amber-900 font-extrabold text-[11px] uppercase tracking-wider flex items-center gap-1">
+                          <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Doorstep Handover PIN</span>
+                        </span>
+                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">
+                          Customer Only
+                        </span>
+                      </div>
+                      <span className="font-mono text-2xl font-black text-amber-950 tracking-widest block py-0.5">
+                        {selectedOrder.deliveryPin}
+                      </span>
+                      <p className="text-[10px] text-amber-800 leading-snug">
+                        🔒 Only you have this PIN. The delivery rider will ask you for it at your doorstep to verify handover.
+                      </p>
+                    </div>
+                  )}
 
                   <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
-                    <span className="text-slate-400 block text-[11px] font-medium">Pickup Window</span>
+                    <span className="text-slate-400 block text-[11px] font-medium">
+                      {selectedOrder.orderChannel === 'walk_in' ? 'Intake / Drop Date' : 'Pickup Window'}
+                    </span>
                     <span className="font-bold text-slate-900 block">{selectedOrder.pickupSlot?.date || selectedOrder.orderDate}</span>
-                    <span className="text-[10px] text-slate-500">{selectedOrder.pickupSlot?.window || 'Standard Window'}</span>
+                    <span className="text-[10px] text-slate-500">
+                      {selectedOrder.orderChannel === 'walk_in' ? 'Counter Drop-off' : (selectedOrder.pickupSlot?.window || 'Standard Window')}
+                    </span>
                   </div>
 
                   <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
@@ -868,15 +892,28 @@ function CustomerOrdersContent() {
                         <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
                           <Camera className="w-3.5 h-3.5 text-sky-400" />
                           <span>Rider Doorstep Photo Proof</span>
+                          <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            Cloudflare R2 Storage
+                          </span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setPreviewPhotoUrl(selectedOrder.riderHandover?.riderPhotoEvidence || null)}
-                          className="text-[11px] font-bold text-sky-400 hover:text-sky-300 flex items-center gap-1 hover:underline"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          <span>View Full Photo</span>
-                        </button>
+                        <div className="flex items-center gap-2.5">
+                          <a
+                            href={selectedOrder.riderHandover.riderPhotoEvidence}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[11px] font-bold text-sky-400 hover:text-sky-300 flex items-center gap-1 hover:underline"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>R2 Reference</span>
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewPhotoUrl(selectedOrder.riderHandover?.riderPhotoEvidence || null)}
+                            className="text-[11px] font-bold text-slate-300 hover:text-white flex items-center gap-1 hover:underline"
+                          >
+                            <span>Preview</span>
+                          </button>
+                        </div>
                       </div>
 
                       <div 

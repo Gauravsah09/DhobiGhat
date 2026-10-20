@@ -39,10 +39,12 @@ import {
   Sparkles,
   CreditCard,
   QrCode,
-  Banknote
+  Banknote,
+  Camera,
+  ExternalLink
 } from 'lucide-react';
 import { useLaundry } from '@/context/LaundryContext';
-import { Order, OrderStatus, StoreStaff, StoreOperatorRole, PaymentMethod } from '@/types';
+import { Order, OrderStatus, StoreStaff, StoreOperatorRole, PaymentMethod, CustomerUser, IndianAddress } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 
 export default function AdminConsoleApp() {
@@ -52,6 +54,10 @@ export default function AdminConsoleApp() {
     orders, 
     branches, 
     customers, 
+    addCustomer,
+    updateCustomer,
+    deleteCustomer,
+    deleteOrder,
     staffList,
     addStaff,
     updateStaff,
@@ -149,6 +155,44 @@ export default function AdminConsoleApp() {
   const [settleAmount, setSettleAmount] = useState<string>('');
   const [settleReason, setSettleReason] = useState<string>('Manual Admin Settlement');
   const [settleSuccessMsg, setSettleSuccessMsg] = useState('');
+
+  // Task 1: Customer Accounts Management (Admin CRM)
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerStatusFilter, setCustomerStatusFilter] = useState<'all' | 'enable' | 'disable'>('all');
+  const [editingCustomer, setEditingCustomer] = useState<CustomerUser | null>(null);
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName, setEditLastName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editWalletBalance, setEditWalletBalance] = useState('');
+  const [editStatus, setEditStatus] = useState<'enable' | 'disable'>('enable');
+  const [editFlatNo, setEditFlatNo] = useState('');
+  const [editStreet, setEditStreet] = useState('');
+  const [editCity, setEditCity] = useState('');
+  const [editPincode, setEditPincode] = useState('');
+  const [deletingCustomer, setDeletingCustomer] = useState<CustomerUser | null>(null);
+
+  // Add Customer Modal
+  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
+  const [newCustFirstName, setNewCustFirstName] = useState('');
+  const [newCustLastName, setNewCustLastName] = useState('');
+  const [newCustPhone, setNewCustPhone] = useState('');
+  const [newCustEmail, setNewCustEmail] = useState('');
+  const [newCustWallet, setNewCustWallet] = useState('100');
+  const [newCustFlatNo, setNewCustFlatNo] = useState('');
+  const [newCustStreet, setNewCustStreet] = useState('');
+  const [newCustCity, setNewCustCity] = useState('Bengaluru');
+  const [newCustPincode, setNewCustPincode] = useState('560038');
+
+  // Task 2: Order Deletion modal
+  const [deletingOrder, setDeletingOrder] = useState<Order | null>(null);
+  const [deleteOrderReason, setDeleteOrderReason] = useState('Stuck order / cancelled test');
+
+  // Task 3: Order Channel filter
+  const [orderChannelFilter, setOrderChannelFilter] = useState<'all' | 'online' | 'walk_in'>('all');
+
+  // Task 4: Rider photo evidence modal
+  const [previewEvidencePhoto, setPreviewEvidencePhoto] = useState<{ url: string; invoiceNo: string; customerName: string } | null>(null);
 
   // Total metrics
   const totalRevenue = orders.reduce((sum, o) => sum + o.grandTotal, 0);
@@ -896,41 +940,67 @@ export default function AdminConsoleApp() {
             </div>
 
             {/* Filter Pills & Search */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
-              <div className="flex bg-slate-950 p-1 rounded-2xl border border-slate-800 text-xs font-bold overflow-x-auto">
-                {[
-                  { id: 'all', label: `All Active (${orders.filter(o => !o.isArchived).length})` },
-                  { id: 'active', label: `In Progress (${orders.filter(o => !['delivered', 'closed', 'cancelled', 'manual_settlement'].includes(o.status) && !o.isArchived).length})` },
-                  { id: 'manual_settlement', label: `Manual Settlement (${orders.filter(o => o.status === 'manual_settlement' && !o.isArchived).length})` },
-                  { id: 'delivered', label: `Delivered (${orders.filter(o => o.status === 'delivered' && !o.isArchived).length})` },
-                  { id: 'closed', label: `Closed (${orders.filter(o => o.status === 'closed' && !o.isArchived).length})` },
-                  { id: 'payment_pending', label: `Payment Due (${orders.filter(o => o.paymentStatus !== 'paid' && o.status !== 'cancelled' && !o.isArchived).length})` },
-                  { id: 'archived', label: `Archived (${orders.filter(o => o.isArchived).length})` },
-                ].map((pill) => (
-                  <button
-                    key={pill.id}
-                    type="button"
-                    onClick={() => setOrderStatusFilter(pill.id as any)}
-                    className={`px-3 py-1.5 rounded-xl transition-all shrink-0 ${
-                      orderStatusFilter === pill.id
-                        ? 'bg-sky-600 text-white font-black shadow-xs'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {pill.label}
-                  </button>
-                ))}
+            <div className="flex flex-col gap-2.5 pt-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                {/* Status Pills */}
+                <div className="flex bg-slate-950 p-1 rounded-2xl border border-slate-800 text-xs font-bold overflow-x-auto">
+                  {[
+                    { id: 'all', label: `All Active (${orders.filter(o => !o.isArchived).length})` },
+                    { id: 'active', label: `In Progress (${orders.filter(o => !['delivered', 'closed', 'cancelled', 'manual_settlement'].includes(o.status) && !o.isArchived).length})` },
+                    { id: 'manual_settlement', label: `Manual Settlement (${orders.filter(o => o.status === 'manual_settlement' && !o.isArchived).length})` },
+                    { id: 'delivered', label: `Delivered (${orders.filter(o => o.status === 'delivered' && !o.isArchived).length})` },
+                    { id: 'closed', label: `Closed (${orders.filter(o => o.status === 'closed' && !o.isArchived).length})` },
+                    { id: 'payment_pending', label: `Payment Due (${orders.filter(o => o.paymentStatus !== 'paid' && o.status !== 'cancelled' && !o.isArchived).length})` },
+                    { id: 'archived', label: `Archived (${orders.filter(o => o.isArchived).length})` },
+                  ].map((pill) => (
+                    <button
+                      key={pill.id}
+                      type="button"
+                      onClick={() => setOrderStatusFilter(pill.id as any)}
+                      className={`px-3 py-1.5 rounded-xl transition-all shrink-0 ${
+                        orderStatusFilter === pill.id
+                          ? 'bg-sky-600 text-white font-black shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {pill.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-500" />
+                  <input
+                    type="text"
+                    placeholder="Filter invoice, customer..."
+                    value={orderSearch}
+                    onChange={(e) => setOrderSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                  />
+                </div>
               </div>
 
-              <div className="relative w-full sm:w-64">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-500" />
-                <input
-                  type="text"
-                  placeholder="Filter invoice, customer..."
-                  value={orderSearch}
-                  onChange={(e) => setOrderSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                />
+              {/* Channel Selector: All / Online Pickup / Walk-in Counter */}
+              <div className="flex items-center gap-1.5 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800 w-fit text-xs">
+                <span className="text-[10px] font-extrabold text-slate-400 px-2 uppercase tracking-wider">Channel Filter:</span>
+                {[
+                  { id: 'all', label: `All Channels (${orders.filter(o => !o.isArchived).length})` },
+                  { id: 'online', label: `Online Pickup (${orders.filter(o => o.orderChannel !== 'walk_in' && !o.isArchived).length})` },
+                  { id: 'walk_in', label: `Walk-in Counter (${orders.filter(o => o.orderChannel === 'walk_in' && !o.isArchived).length})` },
+                ].map((ch) => (
+                  <button
+                    key={ch.id}
+                    type="button"
+                    onClick={() => setOrderChannelFilter(ch.id as any)}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                      orderChannelFilter === ch.id
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                    }`}
+                  >
+                    {ch.label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -961,6 +1031,10 @@ export default function AdminConsoleApp() {
                 <tbody className="divide-y divide-slate-800/80">
                   {(() => {
                     const filtered = orders.filter((o) => {
+                      // Channel Filter (Online vs Walk-in)
+                      if (orderChannelFilter === 'online' && o.orderChannel === 'walk_in') return false;
+                      if (orderChannelFilter === 'walk_in' && o.orderChannel !== 'walk_in') return false;
+
                       if (orderStatusFilter === 'active') {
                         if (['delivered', 'closed', 'cancelled', 'manual_settlement'].includes(o.status) || o.isArchived) return false;
                       } else if (orderStatusFilter === 'manual_settlement') {
@@ -1064,7 +1138,26 @@ export default function AdminConsoleApp() {
                           </span>
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            {/* Cloudflare R2 Photo Evidence Button */}
+                            {ord.riderHandover?.riderPhotoEvidence && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPreviewEvidencePhoto({
+                                    url: ord.riderHandover!.riderPhotoEvidence!,
+                                    invoiceNo: ord.invoiceNo,
+                                    customerName: ord.customerName,
+                                  })
+                                }
+                                className="px-2.5 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
+                                title="View Cloudflare R2 photo evidence"
+                              >
+                                <Camera className="w-3 h-3 text-sky-400" />
+                                <span>R2 Photo</span>
+                              </button>
+                            )}
+
                             {/* Manual Settle Action Button */}
                             {ord.status !== 'closed' && ord.status !== 'manual_settlement' && (
                               <button
@@ -1122,10 +1215,287 @@ export default function AdminConsoleApp() {
                                 <span>Restore</span>
                               </button>
                             )}
+
+                            {/* Delete Stuck Order Action Button (Task 2) */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDeletingOrder(ord);
+                                setDeleteOrderReason('Admin removed stuck order');
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
+                              title="Permanently delete stuck order and invoice"
+                            >
+                              <Trash2 className="w-3 h-3 text-rose-400" />
+                              <span>Delete</span>
+                            </button>
                           </div>
                         </td>
                       </tr>
                     ));
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: CUSTOMER ACCOUNTS CRM (TASK 1) */}
+        {activeTab === 'customers' && (
+          <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-6">
+            
+            {/* Header & Quick Action */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-extrabold text-base text-white">Customer Accounts & CRM Central</h3>
+                  <span className="text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                    {customers.length} Accounts Registered
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  Manage registered customer accounts, update profiles & Indian delivery addresses, adjust wallet balances, and delete obsolete or stuck accounts.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setNewCustFirstName('');
+                  setNewCustLastName('');
+                  setNewCustPhone('');
+                  setNewCustEmail('');
+                  setNewCustWallet('100');
+                  setNewCustFlatNo('');
+                  setNewCustStreet('');
+                  setNewCustCity('Bengaluru');
+                  setNewCustPincode('560038');
+                  setShowAddCustomerModal(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-extrabold text-xs shadow-md shadow-sky-600/25 transition-all self-start sm:self-auto cursor-pointer"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>+ Add Customer Account</span>
+              </button>
+            </div>
+
+            {/* Quick Metrics */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800">
+                <span className="text-slate-400 block text-[11px] mb-1">Total Customer Accounts</span>
+                <span className="font-mono text-xl font-bold text-white">{customers.length}</span>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800">
+                <span className="text-slate-400 block text-[11px] mb-1">Active Accounts</span>
+                <span className="font-mono text-xl font-bold text-emerald-400">
+                  {customers.filter((c) => c.status !== 'disable').length}
+                </span>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800">
+                <span className="text-slate-400 block text-[11px] mb-1">Total Bookings Recorded</span>
+                <span className="font-mono text-xl font-bold text-sky-400">
+                  {customers.reduce((sum, c) => sum + (c.totalOrders || 0), 0)}
+                </span>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800">
+                <span className="text-slate-400 block text-[11px] mb-1">Total Wallet Balances</span>
+                <span className="font-mono text-xl font-bold text-purple-400">
+                  {formatCurrency(customers.reduce((sum, c) => sum + (c.walletBalance || 0), 0), settings.currency)}
+                </span>
+              </div>
+            </div>
+
+            {/* Search & Status Filters */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="flex bg-slate-950 p-1 rounded-2xl border border-slate-800 text-xs font-bold w-fit">
+                {[
+                  { id: 'all', label: `All (${customers.length})` },
+                  { id: 'enable', label: `Active (${customers.filter((c) => c.status !== 'disable').length})` },
+                  { id: 'disable', label: `Disabled (${customers.filter((c) => c.status === 'disable').length})` },
+                ].map((pill) => (
+                  <button
+                    key={pill.id}
+                    type="button"
+                    onClick={() => setCustomerStatusFilter(pill.id as any)}
+                    className={`px-3 py-1.5 rounded-xl transition-all ${
+                      customerStatusFilter === pill.id
+                        ? 'bg-sky-600 text-white font-black shadow-xs'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {pill.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative w-full sm:w-72">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Search name, phone, email, ID..."
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                />
+              </div>
+            </div>
+
+            {/* Customers Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 uppercase text-[10px] font-black tracking-wider">
+                    <th className="py-2.5 px-3">Customer</th>
+                    <th className="py-2.5 px-3">Contact</th>
+                    <th className="py-2.5 px-3">Addresses</th>
+                    <th className="py-2.5 px-3">Orders</th>
+                    <th className="py-2.5 px-3">Wallet</th>
+                    <th className="py-2.5 px-3">Status</th>
+                    <th className="py-2.5 px-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/80">
+                  {(() => {
+                    const filtered = customers.filter((c) => {
+                      if (customerStatusFilter !== 'all' && c.status !== customerStatusFilter) {
+                        return false;
+                      }
+                      if (!customerSearch.trim()) return true;
+                      const q = customerSearch.toLowerCase();
+                      const fullName = `${c.firstName} ${c.lastName}`.toLowerCase();
+                      return (
+                        fullName.includes(q) ||
+                        c.phone.includes(q) ||
+                        c.email.toLowerCase().includes(q) ||
+                        c.id.toLowerCase().includes(q)
+                      );
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={7} className="py-12 text-center text-slate-500">
+                            No customer accounts found matching criteria.
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return filtered.map((cust) => {
+                      const defaultAddr = cust.addresses?.find((a) => a.id === cust.defaultAddressId) || cust.addresses?.[0];
+                      return (
+                        <tr key={cust.id} className="hover:bg-slate-800/40 transition-colors">
+                          <td className="py-3 px-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-sky-500 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0">
+                                {cust.firstName[0]?.toUpperCase() || 'C'}
+                              </div>
+                              <div>
+                                <span className="font-bold text-white block">
+                                  {cust.firstName} {cust.lastName}
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-mono block">
+                                  {cust.id} • Joined {cust.joinDate}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="py-3 px-3">
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1.5 font-mono text-slate-200">
+                                <Phone className="w-3 h-3 text-sky-400" />
+                                <span>+91 {cust.phone}</span>
+                              </div>
+                              <span className="text-[10px] text-slate-400 block truncate max-w-[180px]">
+                                {cust.email}
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="py-3 px-3 max-w-[220px]">
+                            {defaultAddr ? (
+                              <div className="space-y-0.5">
+                                <span className="text-[11px] text-slate-200 truncate block">
+                                  {defaultAddr.flatNo}, {defaultAddr.street}
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-mono block">
+                                  {defaultAddr.city} - {defaultAddr.pincode}
+                                  {cust.addresses.length > 1 && ` (+${cust.addresses.length - 1} more)`}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-500 text-[11px]">No address saved</span>
+                            )}
+                          </td>
+
+                          <td className="py-3 px-3 font-mono font-bold text-slate-200">
+                            {cust.totalOrders || 0}
+                          </td>
+
+                          <td className="py-3 px-3 font-mono font-bold text-emerald-400">
+                            ₹{cust.walletBalance || 0}
+                          </td>
+
+                          <td className="py-3 px-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newStatus = cust.status === 'disable' ? 'enable' : 'disable';
+                                updateCustomer(cust.id, { status: newStatus });
+                              }}
+                              className={`px-2.5 py-0.5 rounded-full font-bold uppercase text-[10px] border cursor-pointer transition-colors ${
+                                cust.status === 'disable'
+                                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                              }`}
+                              title="Click to toggle account status"
+                            >
+                              {cust.status === 'disable' ? 'Disabled' : 'Active'}
+                            </button>
+                          </td>
+
+                          <td className="py-3 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {/* Edit Customer Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingCustomer(cust);
+                                  setEditFirstName(cust.firstName);
+                                  setEditLastName(cust.lastName);
+                                  setEditEmail(cust.email);
+                                  setEditPhone(cust.phone);
+                                  setEditWalletBalance(String(cust.walletBalance || 0));
+                                  setEditStatus(cust.status || 'enable');
+                                  const defA = cust.addresses?.find((a) => a.id === cust.defaultAddressId) || cust.addresses?.[0];
+                                  setEditFlatNo(defA?.flatNo || '');
+                                  setEditStreet(defA?.street || '');
+                                  setEditCity(defA?.city || 'Bengaluru');
+                                  setEditPincode(defA?.pincode || '560038');
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
+                                title="Edit Customer Account Details"
+                              >
+                                <Edit3 className="w-3 h-3" />
+                                <span>Edit</span>
+                              </button>
+
+                              {/* Delete Customer Button */}
+                              <button
+                                type="button"
+                                onClick={() => setDeletingCustomer(cust)}
+                                className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
+                                title="Permanently delete customer account"
+                              >
+                                <Trash2 className="w-3 h-3 text-rose-400" />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    });
                   })()}
                 </tbody>
               </table>
@@ -1564,6 +1934,610 @@ export default function AdminConsoleApp() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* 1. DELETE STUCK ORDER MODAL (TASK 2) */}
+        {deletingOrder && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex justify-between items-start border-b border-slate-800 pb-3">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1.5">
+                    <Trash2 className="w-4 h-4 text-rose-500" />
+                    <span>Delete Stuck Order & Invoice</span>
+                  </span>
+                  <h3 className="text-lg font-black text-white mt-0.5">
+                    Order #{deletingOrder.invoiceNo}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Customer: <strong className="text-white">{deletingOrder.customerName}</strong>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDeletingOrder(null)}
+                  className="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-rose-950/20 border border-rose-500/30 space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Order Channel:</span>
+                  <span className="font-bold text-white uppercase">{deletingOrder.orderChannel || 'online'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Current Pipeline Status:</span>
+                  <span className="font-bold text-amber-400 uppercase">{deletingOrder.status}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Grand Total:</span>
+                  <span className="font-mono font-bold text-white">
+                    {formatCurrency(deletingOrder.grandTotal, settings.currency)}
+                  </span>
+                </div>
+                <p className="text-[11px] text-rose-300 pt-1.5 border-t border-rose-500/20 leading-relaxed">
+                  ⚠️ <strong>Permanent Action:</strong> This will completely delete this order and its invoice from the active pipeline, database ledger, and customer history. Use this to clear stuck or corrupted bookings.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Reason for Deletion
+                </label>
+                <input
+                  type="text"
+                  value={deleteOrderReason}
+                  onChange={(e) => setDeleteOrderReason(e.target.value)}
+                  placeholder="e.g. Stuck payment, Duplicate test order, Customer abandoned"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setDeletingOrder(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    deleteOrder(deletingOrder.id);
+                    setSettleSuccessMsg(`Order #${deletingOrder.invoiceNo} successfully deleted from ledger.`);
+                    setDeletingOrder(null);
+                    setTimeout(() => setSettleSuccessMsg(''), 4000);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs shadow-md shadow-rose-600/30 flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Permanently Delete Order</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 2. EDIT CUSTOMER ACCOUNT MODAL (TASK 1) */}
+        {editingCustomer && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex justify-between items-start border-b border-slate-800 pb-3">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
+                    <Edit3 className="w-4 h-4 text-sky-400" />
+                    <span>Edit Customer Profile</span>
+                  </span>
+                  <h3 className="text-lg font-black text-white mt-0.5">
+                    {editingCustomer.firstName} {editingCustomer.lastName}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-mono">
+                    ID: {editingCustomer.id} • Joined: {editingCustomer.joinDate}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingCustomer(null)}
+                  className="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const updatedAddr: IndianAddress = {
+                    id: editingCustomer.defaultAddressId || `addr-${Date.now()}`,
+                    label: 'Home',
+                    tag: 'Home',
+                    flatNo: editFlatNo.trim() || 'Flat 101',
+                    society: 'Indiranagar Society',
+                    street: editStreet.trim() || 'Main Road',
+                    city: editCity.trim() || 'Bengaluru',
+                    state: 'Karnataka',
+                    pincode: editPincode.trim() || '560038',
+                    isDefault: true,
+                  };
+
+                  updateCustomer(editingCustomer.id, {
+                    firstName: editFirstName.trim(),
+                    lastName: editLastName.trim(),
+                    email: editEmail.trim().toLowerCase(),
+                    phone: editPhone.replace(/\D/g, ''),
+                    walletBalance: parseFloat(editWalletBalance) || 0,
+                    status: editStatus,
+                    addresses: [updatedAddr],
+                  });
+
+                  setSettleSuccessMsg(`Customer account "${editFirstName} ${editLastName}" updated successfully.`);
+                  setEditingCustomer(null);
+                  setTimeout(() => setSettleSuccessMsg(''), 4000);
+                }}
+                className="space-y-3.5 text-xs"
+              >
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">First Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editFirstName}
+                      onChange={(e) => setEditFirstName(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">Last Name</label>
+                    <input
+                      type="text"
+                      value={editLastName}
+                      onChange={(e) => setEditLastName(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">Mobile Phone (10 digits) *</label>
+                    <div className="flex">
+                      <span className="px-2.5 py-2 rounded-l-xl bg-slate-800 border border-r-0 border-slate-700 text-slate-400 font-mono">
+                        +91
+                      </span>
+                      <input
+                        type="tel"
+                        required
+                        maxLength={10}
+                        value={editPhone}
+                        onChange={(e) => setEditPhone(e.target.value.replace(/\D/g, ''))}
+                        className="w-full px-3 py-2 rounded-r-xl bg-slate-950 border border-slate-800 text-white font-mono focus:outline-none focus:ring-1 focus:ring-sky-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">Email Address *</label>
+                    <input
+                      type="email"
+                      required
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">Wallet Balance (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={editWalletBalance}
+                      onChange={(e) => setEditWalletBalance(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-emerald-400 font-mono font-bold focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">Account Status</label>
+                    <select
+                      value={editStatus}
+                      onChange={(e) => setEditStatus(e.target.value as any)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    >
+                      <option value="enable">Active (Enable)</option>
+                      <option value="disable">Disabled (Disable)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Primary Address */}
+                <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
+                  <span className="font-bold text-[11px] text-slate-300 block">Default Indian Delivery Address</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Flat / House / Building"
+                      value={editFlatNo}
+                      onChange={(e) => setEditFlatNo(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-white placeholder-slate-600 focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Street / Locality"
+                      value={editStreet}
+                      onChange={(e) => setEditStreet(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-white placeholder-slate-600 focus:outline-none"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="City"
+                      value={editCity}
+                      onChange={(e) => setEditCity(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-white placeholder-slate-600 focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      maxLength={6}
+                      placeholder="Pincode (6 digits)"
+                      value={editPincode}
+                      onChange={(e) => setEditPincode(e.target.value.replace(/\D/g, ''))}
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono placeholder-slate-600 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end gap-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setEditingCustomer(null)}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-extrabold shadow-md shadow-sky-600/30 flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Save Changes</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* 3. DELETE CUSTOMER ACCOUNT MODAL (TASK 1) */}
+        {deletingCustomer && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex justify-between items-start border-b border-slate-800 pb-3">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1.5">
+                    <Trash2 className="w-4 h-4 text-rose-500" />
+                    <span>Delete Customer Account</span>
+                  </span>
+                  <h3 className="text-lg font-black text-white mt-0.5">
+                    {deletingCustomer.firstName} {deletingCustomer.lastName}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-mono">
+                    +91 {deletingCustomer.phone} • {deletingCustomer.email}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDeletingCustomer(null)}
+                  className="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-rose-950/20 border border-rose-500/30 space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Total Orders Placed:</span>
+                  <span className="font-bold text-white">{deletingCustomer.totalOrders || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Wallet Balance:</span>
+                  <span className="font-mono font-bold text-emerald-400">₹{deletingCustomer.walletBalance || 0}</span>
+                </div>
+                <p className="text-[11px] text-rose-300 pt-1.5 border-t border-rose-500/20 leading-relaxed">
+                  ⚠️ <strong>Irreversible Deletion:</strong> This customer account and all associated delivery addresses will be permanently deleted from the database ledger. Active customer login sessions for this phone will be invalidated.
+                </p>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setDeletingCustomer(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    deleteCustomer(deletingCustomer.id);
+                    setSettleSuccessMsg(`Customer account (${deletingCustomer.firstName} ${deletingCustomer.lastName}) permanently deleted.`);
+                    setDeletingCustomer(null);
+                    setTimeout(() => setSettleSuccessMsg(''), 4000);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs shadow-md shadow-rose-600/30 flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Permanently Delete Customer</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 4. ADD NEW CUSTOMER ACCOUNT MODAL (TASK 1) */}
+        {showAddCustomerModal && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex justify-between items-start border-b border-slate-800 pb-3">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
+                    <UserPlus className="w-4 h-4 text-sky-400" />
+                    <span>Customer Registration</span>
+                  </span>
+                  <h3 className="text-lg font-black text-white mt-0.5">
+                    Create New Customer Account
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Register a new customer profile with welcome wallet credit and default address.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAddCustomerModal(false)}
+                  className="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newCustFirstName.trim() || !newCustPhone.trim()) {
+                    alert('Please provide first name and phone number.');
+                    return;
+                  }
+                  const cleanPhone = newCustPhone.replace(/\D/g, '');
+                  if (cleanPhone.length < 10) {
+                    alert('Please provide a valid 10-digit Indian mobile number.');
+                    return;
+                  }
+
+                  const defaultAddrId = `addr-${Date.now()}`;
+                  addCustomer({
+                    firstName: newCustFirstName.trim(),
+                    lastName: newCustLastName.trim(),
+                    phone: cleanPhone,
+                    email: newCustEmail.trim() || `${cleanPhone}@dhobighat.in`,
+                    walletBalance: parseFloat(newCustWallet) || 100,
+                    status: 'enable',
+                    defaultAddressId: defaultAddrId,
+                    addresses: [
+                      {
+                        id: defaultAddrId,
+                        label: 'Home',
+                        tag: 'Home',
+                        flatNo: newCustFlatNo.trim() || 'Flat 101',
+                        society: 'Indiranagar Society',
+                        street: newCustStreet.trim() || '12th Main Road',
+                        city: newCustCity.trim() || 'Bengaluru',
+                        state: 'Karnataka',
+                        pincode: newCustPincode.trim() || '560038',
+                        isDefault: true,
+                      },
+                    ],
+                  });
+
+                  setSettleSuccessMsg(`Customer "${newCustFirstName.trim()}" successfully registered!`);
+                  setShowAddCustomerModal(false);
+                  setTimeout(() => setSettleSuccessMsg(''), 4000);
+                }}
+                className="space-y-3 text-xs"
+              >
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">First Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Suresh"
+                      value={newCustFirstName}
+                      onChange={(e) => setNewCustFirstName(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">Last Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Reddy"
+                      value={newCustLastName}
+                      onChange={(e) => setNewCustLastName(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">Mobile Phone (India) *</label>
+                    <div className="flex">
+                      <span className="px-2.5 py-2 rounded-l-xl bg-slate-800 border border-r-0 border-slate-700 text-slate-400 font-mono">
+                        +91
+                      </span>
+                      <input
+                        type="tel"
+                        required
+                        maxLength={10}
+                        placeholder="9876543210"
+                        value={newCustPhone}
+                        onChange={(e) => setNewCustPhone(e.target.value.replace(/\D/g, ''))}
+                        className="w-full px-3 py-2 rounded-r-xl bg-slate-950 border border-slate-800 text-white font-mono placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      placeholder="suresh@example.com"
+                      value={newCustEmail}
+                      onChange={(e) => setNewCustEmail(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Initial Wallet Credit (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newCustWallet}
+                    onChange={(e) => setNewCustWallet(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-emerald-400 font-mono font-bold focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+
+                {/* Primary Address */}
+                <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
+                  <span className="font-bold text-[11px] text-slate-300 block">Initial Delivery Address</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Flat / House / Building"
+                      value={newCustFlatNo}
+                      onChange={(e) => setNewCustFlatNo(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-white placeholder-slate-600 focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Street / Locality"
+                      value={newCustStreet}
+                      onChange={(e) => setNewCustStreet(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-white placeholder-slate-600 focus:outline-none"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="City"
+                      value={newCustCity}
+                      onChange={(e) => setNewCustCity(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-white placeholder-slate-600 focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      maxLength={6}
+                      placeholder="Pincode (e.g. 560038)"
+                      value={newCustPincode}
+                      onChange={(e) => setNewCustPincode(e.target.value.replace(/\D/g, ''))}
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono placeholder-slate-600 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end gap-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCustomerModal(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-extrabold shadow-md shadow-sky-600/30 flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>Create Customer Account</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* 5. CLOUDFLARE R2 PHOTO EVIDENCE PREVIEW MODAL (TASK 4) */}
+        {previewEvidencePhoto && (
+          <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex justify-between items-start border-b border-slate-800 pb-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                      <Camera className="w-4 h-4 text-emerald-400" />
+                      <span>Rider Garment Intake Evidence</span>
+                    </span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                      Cloudflare R2 Object Storage
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-black text-white mt-1">
+                    Order #{previewEvidencePhoto.invoiceNo} • {previewEvidencePhoto.customerName}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPreviewEvidencePhoto(null)}
+                  className="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="rounded-2xl overflow-hidden border border-slate-800 bg-black/60 max-h-[60vh] flex items-center justify-center">
+                <img
+                  src={previewEvidencePhoto.url}
+                  alt={`Evidence for #${previewEvidencePhoto.invoiceNo}`}
+                  className="max-h-[58vh] w-auto object-contain rounded-xl"
+                />
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-800 text-xs">
+                <div className="text-slate-400 font-mono text-[11px] truncate max-w-md">
+                  R2 Reference: <span className="text-sky-300">{previewEvidencePhoto.url}</span>
+                </div>
+                <div className="flex items-center gap-2 self-end sm:self-auto">
+                  <a
+                    href={previewEvidencePhoto.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center gap-1.5 transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Open in New Tab</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewEvidencePhoto(null)}
+                    className="px-4 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

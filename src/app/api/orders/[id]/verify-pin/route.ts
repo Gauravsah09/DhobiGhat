@@ -14,6 +14,16 @@ export async function POST(
   try {
     const { id } = await params;
     const session = await getRequestSession(req);
+
+    // Require authenticated delivery rider, store staff, or administrator
+    const isAuthorizedStaff = session?.role === 'rider' || session?.role === 'store_operator' || session?.role === 'counter_operator' || session?.role === 'store_manager' || session?.role === 'manager' || session?.role === 'admin' || session?.role === 'super_admin';
+    if (!isAuthorizedStaff && process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        { success: false, message: 'Forbidden. Authenticated rider or staff session required.' },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
     const { inputPin, paymentMethod, paymentRef, actorName } = body;
 
@@ -37,8 +47,8 @@ export async function POST(
       );
     }
 
-    // 1. Check for Pre-Paid / Verified Online UPI Bypass
-    const isPrePaid = order.paymentStatus === 'paid' || order.paymentMethod === 'online' || order.paymentMethod === 'upi_qr';
+    // 1. PIN verification can ONLY be waived if payment is ALREADY confirmed & settled
+    const isPrePaid = order.paymentStatus === 'paid' && (order.paymentMethod === 'online' || order.paymentMethod === 'upi_qr');
 
     if (!isPrePaid) {
       // 2. Check Brute-Force Lockout

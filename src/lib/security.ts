@@ -49,9 +49,45 @@ export function sanitizeInvoiceNo(inv: string): string {
 }
 
 /**
- * Synchronous password hash generation for customer credentials
+ * Computes cryptographically secure SHA-256 hash using native Web Crypto API
+ * Works across all modern browsers and Node.js runtimes without external dependencies.
+ */
+export async function sha256Async(message: string): Promise<string> {
+  if (!message) return '';
+  const msgUint8 = new TextEncoder().encode(message);
+  const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Synchronous salted password hash generation for customer credentials.
+ * Multi-round salted hashing with 64-bit state mixing.
  */
 export function hashPassword(password: string): string {
+  if (!password) return '';
+  const salt = 'dhobighat_kryptos_v3_salt_9281';
+  let h1 = 0x811c9dc5;
+  let h2 = 0xcbf29ce4;
+  const str = password + ':' + salt;
+
+  for (let round = 0; round < 3; round++) {
+    for (let i = 0; i < str.length; i++) {
+      const code = str.charCodeAt(i) + (round * 31);
+      h1 = Math.imul(h1 ^ code, 0x01000193) ^ (code << 5);
+      h2 = Math.imul(h2 ^ (code + i), 0x5bd1e995) ^ (code >> 3);
+    }
+  }
+
+  const hex1 = (h1 >>> 0).toString(16).padStart(8, '0');
+  const hex2 = (h2 >>> 0).toString(16).padStart(8, '0');
+  return `dh3_${hex1}_${hex2}`;
+}
+
+/**
+ * Legacy hash generator to verify backwards compatibility
+ */
+function legacyDjb2Hash(password: string): string {
   if (!password) return '';
   let hash1 = 5381;
   let hash2 = 52711;
@@ -62,5 +98,16 @@ export function hashPassword(password: string): string {
     hash2 = ((hash2 << 5) + hash2) ^ char;
   }
   return `dh_${Math.abs(hash1).toString(16)}_${Math.abs(hash2).toString(16)}`;
+}
+
+/**
+ * Verifies a plaintext password against a stored hash (supports modern v3, legacy v2, and plaintext fallback)
+ */
+export function verifyPassword(password: string, storedHash?: string): boolean {
+  if (!password || !storedHash) return false;
+  if (storedHash === password) return true;
+  if (storedHash === hashPassword(password)) return true;
+  if (storedHash === legacyDjb2Hash(password)) return true;
+  return false;
 }
 

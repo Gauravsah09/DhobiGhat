@@ -2,8 +2,29 @@ import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 
-const JWT_SECRET_STRING = process.env.AUTH_JWT_SECRET || 'dhobighat-super-secure-greedy-nerd-jwt-key-2026';
-const secretKey = new TextEncoder().encode(JWT_SECRET_STRING);
+declare global {
+  var __EPHEMERAL_JWT_SECRET__: Uint8Array | undefined;
+}
+
+function resolveSecretKey(): Uint8Array {
+  const envSecret = process.env.AUTH_JWT_SECRET;
+  if (envSecret && envSecret.trim().length >= 32) {
+    return new TextEncoder().encode(envSecret.trim());
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    if (!global.__EPHEMERAL_JWT_SECRET__) {
+      global.__EPHEMERAL_JWT_SECRET__ = new Uint8Array(32);
+      globalThis.crypto.getRandomValues(global.__EPHEMERAL_JWT_SECRET__);
+      console.warn('[SECURITY WARNING] AUTH_JWT_SECRET unset or < 32 chars in production. Generated ephemeral 256-bit machine key.');
+    }
+    return global.__EPHEMERAL_JWT_SECRET__;
+  }
+
+  return new TextEncoder().encode('dhobighat-super-secure-greedy-nerd-jwt-key-2026');
+}
+
+const secretKey = resolveSecretKey();
 
 export const SESSION_COOKIE_NAME = process.env.NODE_ENV === 'production'
   ? '__Host-dhobighat_session'

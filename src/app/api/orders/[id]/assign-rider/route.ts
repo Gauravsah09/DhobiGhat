@@ -11,6 +11,11 @@ export async function POST(
   try {
     const { id } = await params;
     const session = await getRequestSession(req);
+    const isStaffOrAdmin = session?.role === 'store_operator' || session?.role === 'counter_operator' || session?.role === 'store_manager' || session?.role === 'manager' || session?.role === 'admin' || session?.role === 'super_admin';
+    if (!isStaffOrAdmin && process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ success: false, message: 'Forbidden. Staff authorization required to assign riders.' }, { status: 403 });
+    }
+
     const body = await req.json();
     const { riderName, riderPhone, slotWindow = 'Morning', type = 'pickup', actorName } = body;
 

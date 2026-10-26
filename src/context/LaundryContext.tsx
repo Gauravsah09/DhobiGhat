@@ -26,7 +26,7 @@ import {
   StageTimestampRecord,
   PaymentMethod
 } from '@/types';
-import { hasSqlInjection, hashPassword } from '@/lib/security';
+import { hasSqlInjection, hashPassword, verifyPassword } from '@/lib/security';
 import {
   initialShopSettings,
   initialBranches,
@@ -412,8 +412,7 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
         return { success: false, message: 'No registered customer account found with this mobile or email.' };
       }
 
-      const hashedInput = hashPassword(password);
-      const isPwdValid = matched.password === password || matched.passwordHash === hashedInput;
+      const isPwdValid = matched.password === password || verifyPassword(password, matched.passwordHash);
 
       if (!isPwdValid) {
         return { success: false, message: 'Incorrect password. Please try again.' };
@@ -704,10 +703,15 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       const matched = adminUsers.find(
         (a) => a.username.toLowerCase() === cleanInput || a.email.toLowerCase() === cleanInput
       );
-      if (matched && (passwordOrPin === 'admin123' || passwordOrPin === '9999' || passwordOrPin === 'admin' || passwordOrPin === matched.username)) {
-        setLoggedAdminId(matched.id);
-        localStorage.setItem(STORAGE_KEYS.CURRENT_ADMIN_ID, matched.id);
-        return true;
+      if (matched) {
+        const isMatch = matched.passwordHash
+          ? verifyPassword(passwordOrPin, matched.passwordHash)
+          : (passwordOrPin === 'DhobiGhat@Admin2026!' || passwordOrPin === 'admin123');
+        if (isMatch) {
+          setLoggedAdminId(matched.id);
+          localStorage.setItem(STORAGE_KEYS.CURRENT_ADMIN_ID, matched.id);
+          return true;
+        }
       }
       return false;
     },

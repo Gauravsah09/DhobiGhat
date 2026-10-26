@@ -269,6 +269,16 @@ export async function POST(req: NextRequest) {
 // DELETE: Admin can delete stuck orders and invoices for any user
 export async function DELETE(req: NextRequest) {
   try {
+    const session = await getRequestSession(req);
+    const isAdmin = session?.role === 'admin' || session?.role === 'super_admin' || session?.role === 'store_manager' || session?.role === 'manager';
+
+    if (!isAdmin) {
+      return NextResponse.json(
+        { success: false, message: 'Forbidden. Administrator authorization required to delete orders.' },
+        { status: 403 }
+      );
+    }
+
     const { searchParams } = new URL(req.url);
     let orderId = searchParams.get('id');
     let invoiceNo = searchParams.get('invoiceNo');

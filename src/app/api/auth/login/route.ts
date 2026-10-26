@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { signSessionToken, SESSION_COOKIE_NAME } from '@/lib/auth-server';
 import { initialStaff, initialCustomers } from '@/lib/initial-data';
-import { hasSqlInjection, sanitizePhoneNumber } from '@/lib/security';
+import { hasSqlInjection, sanitizePhoneNumber, verifyPassword } from '@/lib/security';
+import { getSharedCustomers } from '@/app/api/customers/route';
 
 // Helper to calculate SHA-256 hash using native Web Crypto API
 async function sha256(message: string): Promise<string> {
@@ -47,9 +48,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: 'Staff phone number not recognized' }, { status: 401 });
       }
 
-      // Compare PIN (direct demo match or hash)
-      const inputHash = await sha256(pin);
-      const isPinValid = pin === staffMember.pin || staffMember.pin === '1234' || pin === '1234' || pin === '9999' || pin === '2222' || pin === '6666';
+      // Compare PIN against staff member's registered credential only
+      const isPinValid = pin === staffMember.pin;
 
       if (!isPinValid) {
         return NextResponse.json({ success: false, message: 'Invalid 4-digit PIN' }, { status: 401 });
@@ -88,12 +88,40 @@ export async function POST(req: NextRequest) {
       return response;
     }
 
-    // Customer Login & Account Session (Password-based)
+    // Customer Login & Account Session (Password-based with verification)
     if (type === 'customer') {
       const cleanPhone = phone ? sanitizePhoneNumber(phone) : '';
       const cleanEmail = email ? String(email).trim().toLowerCase() : '';
 
-      const customer = {
+      if (!cleanPhone && !cleanEmail) {
+        return NextResponse.json({ success: false, message: 'Phone number or email is required.' }, { status: 400 });
+      }
+
+      if (!password && !otp) {
+        return NextResponse.json(
+          { success: false, message: 'Password or authentication token is required.' },
+          { status: 400 }
+        );
+      }
+
+      const customers = getSharedCustomers();
+      const matched = customers.find((c) => {
+        const phoneMatch = cleanPhone.length >= 10 && c.phone.replace(/\D/g, '').endsWith(cleanPhone);
+        const emailMatch = cleanEmail.length > 0 && c.email.toLowerCase() === cleanEmail;
+        return phoneMatch || emailMatch;
+      });
+
+      // Verify password for registered accounts
+      if (matched && password) {
+        const isPwdValid = verifyPassword(password, matched.passwordHash || matched.password);
+        if (!isPwdValid) {
+          return NextResponse.json({ success: false, message: 'Incorrect customer password.' }, { status: 401 });
+        }
+      } else if (!matched && !body.isNewSignup && !otp) {
+        return NextResponse.json({ success: false, message: 'Customer account not found.' }, { status: 404 });
+      }
+
+      const effectiveCustomer = matched || {
         id: body.id || `cust-${Date.now()}`,
         phone: cleanPhone || '9876543210',
         firstName: firstName || body.name || 'Valued',
@@ -102,20 +130,20 @@ export async function POST(req: NextRequest) {
       };
 
       const sessionToken = await signSessionToken({
-        userId: customer.id,
+        userId: effectiveCustomer.id,
         role: 'customer',
-        phone: customer.phone,
-        fullName: `${customer.firstName} ${customer.lastName}`.trim(),
+        phone: effectiveCustomer.phone,
+        fullName: `${effectiveCustomer.firstName} ${effectiveCustomer.lastName}`.trim(),
       });
 
       const response = NextResponse.json({
         success: true,
         user: {
-          id: customer.id,
-          name: `${customer.firstName} ${customer.lastName}`.trim(),
+          id: effectiveCustomer.id,
+          name: `${effectiveCustomer.firstName} ${effectiveCustomer.lastName}`.trim(),
           role: 'customer',
-          phone: customer.phone,
-          email: customer.email,
+          phone: effectiveCustomer.phone,
+          email: effectiveCustomer.email,
         },
       });
 

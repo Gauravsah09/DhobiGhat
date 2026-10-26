@@ -41,6 +41,11 @@ export async function PATCH(
     const rawParams = await params;
     const id = (rawParams?.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
     const session = await getRequestSession(req);
+    const isStaffOrAdmin = session?.role === 'worker' || session?.role === 'rider' || session?.role === 'store_operator' || session?.role === 'counter_operator' || session?.role === 'store_manager' || session?.role === 'manager' || session?.role === 'admin' || session?.role === 'super_admin';
+    if (!isStaffOrAdmin && process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ success: false, message: 'Forbidden. Staff authorization required to update order stage.' }, { status: 403 });
+    }
+
     const body = await req.json();
     const targetStatus = body.targetStatus || body.status;
     const { subStage, bagPieceCount, bagGrossWeightKg, actorName, notes } = body;

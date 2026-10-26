@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { initialCustomers } from '@/lib/initial-data';
 import { CustomerUser } from '@/types';
 import { hasSqlInjection, sanitizeSqlInput, sanitizePhoneNumber } from '@/lib/security';
+import { getRequestSession } from '@/lib/auth-server';
 
 declare global {
   var __DHOBIGHAT_CUSTOMERS__: CustomerUser[] | undefined;
@@ -25,6 +26,16 @@ export function setSharedCustomers(list: CustomerUser[]) {
 // GET /api/customers - List & search customers
 export async function GET(req: NextRequest) {
   try {
+    const session = await getRequestSession(req);
+    const isAuthorized = session?.role === 'admin' || session?.role === 'super_admin' || session?.role === 'store_manager' || session?.role === 'manager' || session?.role === 'store_operator' || session?.role === 'counter_operator';
+
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { success: false, message: 'Unauthorized. Staff or Administrator access required.' },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(req.url);
     const search = searchParams.get('search')?.toLowerCase();
     const status = searchParams.get('status');
@@ -130,11 +141,22 @@ export async function POST(req: NextRequest) {
 // PUT /api/customers - Update customer account
 export async function PUT(req: NextRequest) {
   try {
+    const session = await getRequestSession(req);
     const body = await req.json();
     const { id, firstName, lastName, phone, email, walletBalance, status, addresses, defaultAddressId } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, message: 'Customer ID is required.' }, { status: 400 });
+    }
+
+    const isPrivileged = session?.role === 'admin' || session?.role === 'super_admin' || session?.role === 'store_manager' || session?.role === 'manager';
+    const isSelf = session?.role === 'customer' && session.userId === id;
+
+    if (!isPrivileged && !isSelf) {
+      return NextResponse.json(
+        { success: false, message: 'Forbidden. Authorization required to update customer.' },
+        { status: 403 }
+      );
     }
 
     const customers = getSharedCustomers();
@@ -173,6 +195,16 @@ export async function PUT(req: NextRequest) {
 // DELETE /api/customers - Delete customer account
 export async function DELETE(req: NextRequest) {
   try {
+    const session = await getRequestSession(req);
+    const isAdmin = session?.role === 'admin' || session?.role === 'super_admin' || session?.role === 'store_manager' || session?.role === 'manager';
+
+    if (!isAdmin) {
+      return NextResponse.json(
+        { success: false, message: 'Forbidden. Administrator authorization required to delete customer accounts.' },
+        { status: 403 }
+      );
+    }
+
     const { searchParams } = new URL(req.url);
     let id = searchParams.get('id');
 

@@ -60,12 +60,32 @@ export async function POST(req: NextRequest) {
       buffer = Buffer.from(base64Clean, 'base64');
     }
 
-    // Sanitize filename & create unique R2 object key
-    const cleanFilename = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const objectKey = `${folder}/${Date.now()}-${cleanFilename}`;
+    // 1. File Size Guard: Enforce 5MB ceiling to prevent Memory Exhaustion / DoS
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+    if (buffer.length > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { success: false, message: `Payload too large. Maximum allowed file size is 5MB (received ${(buffer.length / (1024 * 1024)).toFixed(2)}MB).` },
+        { status: 413 }
+      );
+    }
+
+    // 2. Strict MIME Type Whitelist
+    const ALLOWED_MIME = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+    const normalizedMime = fileContentType.toLowerCase().trim();
+    if (!ALLOWED_MIME.has(normalizedMime)) {
+      return NextResponse.json(
+        { success: false, message: 'Unsupported Media Type. Only JPEG, PNG, and WebP photos are permitted.' },
+        { status: 415 }
+      );
+    }
+
+    // 3. Path Traversal Guard: strictly whitelist folder name and filename
+    const safeFolder = folder.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32) || 'rider-photos';
+    const cleanFilename = originalName.replace(/[^a-zA-Z0-9.-]/g, '_').slice(0, 64);
+    const objectKey = `${safeFolder}/${Date.now()}-${cleanFilename}`;
 
     // Upload to Cloudflare R2
-    const fileUrl = await uploadToR2(objectKey, buffer, fileContentType);
+    const fileUrl = await uploadToR2(objectKey, buffer, normalizedMime);
 
     // If running in local fallback mode, store in cache so /api/uploads/mock can serve it
     if (!isR2Configured && global.__DHOBIGHAT_UPLOAD_CACHE__) {

@@ -324,6 +324,7 @@ export interface AdminUser {
   role: AdminRole;
   avatar?: string;
   permissions: string[];
+  passwordHash?: string;
 }
 
 export interface StoreBranch {

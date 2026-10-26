@@ -74,17 +74,20 @@ export default function AdminConsoleApp() {
     unarchiveOrder,
     archiveAllDeliveredOrders,
     settings, 
-    updateSettings 
+    updateSettings,
+    isLoaded
   } = useLaundry();
 
   const { admin, isAdminLoggedIn, logoutAdmin } = adminSession;
 
-  // Strict Redirect Guard: If not logged in as admin, immediately redirect to /admin/login
+  // Strict Redirect Guard: If not logged in as admin, redirect to /admin/login once hydrated
   useEffect(() => {
-    if (!isAdminLoggedIn || !admin) {
+    if (!isLoaded) return;
+    const localAdminId = typeof window !== 'undefined' ? localStorage.getItem('lms_ind_auth_admin_id_v3') : null;
+    if (!isAdminLoggedIn && !localAdminId) {
       router.replace('/admin/login');
     }
-  }, [isAdminLoggedIn, admin, router]);
+  }, [isAdminLoggedIn, isLoaded, router]);
 
   type AdminTab = 
     | 'dashboard' 
@@ -201,6 +204,18 @@ export default function AdminConsoleApp() {
   const inProcessing = orders.filter((o) => ['processing', 'washing', 'drying', 'ironing', 'qc_check', 'sorting', 'received'].includes(o.status)).length;
   const outDelivery = orders.filter((o) => o.status === 'out_for_delivery').length;
   const activeDisputes = orders.filter((o) => o.status === 'disputed' || o.dispute).length;
+
+  // Hydration state check
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 font-sans">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-slate-400 font-mono">Verifying Administrator Session...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Unauthenticated Guard
   if (!isAdminLoggedIn || !admin) {

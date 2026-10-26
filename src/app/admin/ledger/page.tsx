@@ -34,15 +34,17 @@ type LedgerPeriod = 'daily' | 'monthly' | 'quarterly' | 'yearly';
 
 function AdminLedgerContent() {
   const router = useRouter();
-  const { adminSession, orders, branches, settings } = useLaundry();
+  const { adminSession, orders, branches, settings, isLoaded } = useLaundry();
   const { admin, isAdminLoggedIn } = adminSession;
 
   // Strict Redirect Guard: If not logged in as admin, redirect to /admin/login
   useEffect(() => {
-    if (!isAdminLoggedIn || !admin) {
+    if (!isLoaded) return;
+    const localAdminId = typeof window !== 'undefined' ? localStorage.getItem('lms_ind_auth_admin_id_v3') : null;
+    if (!isAdminLoggedIn && !localAdminId) {
       router.replace('/admin/login');
     }
-  }, [isAdminLoggedIn, admin, router]);
+  }, [isAdminLoggedIn, isLoaded, router]);
 
   const [period, setPeriod] = useState<LedgerPeriod>('daily');
   const [selectedYear, setSelectedYear] = useState<number>(2026);
@@ -274,6 +276,16 @@ function AdminLedgerContent() {
     link.click();
     document.body.removeChild(link);
   };
+
+  // Hydration state check
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-10 h-10 border-2 border-sky-500 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-slate-400 font-mono text-xs">Verifying Administrator Session...</p>
+      </div>
+    );
+  }
 
   // Unauthorized Access Guard Screen (Evaluated strictly after all React Hooks)
   if (!isAdminLoggedIn || !admin) {

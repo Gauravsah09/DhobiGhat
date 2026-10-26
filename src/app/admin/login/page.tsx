@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -21,13 +21,20 @@ import { AdminRole } from '@/types';
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const { adminSession } = useLaundry();
-  const { loginAdmin } = adminSession;
+  const { adminSession, isLoaded } = useLaundry();
+  const { loginAdmin, isAdminLoggedIn, admin } = adminSession;
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // If already logged in, seamlessly forward to admin dashboard
+  useEffect(() => {
+    if (isLoaded && isAdminLoggedIn && admin) {
+      router.replace('/admin');
+    }
+  }, [isLoaded, isAdminLoggedIn, admin, router]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,12 +44,12 @@ export default function AdminLoginPage() {
     setTimeout(() => {
       const success = loginAdmin(identifier, password);
       if (success) {
-        router.push('/admin');
+        router.replace('/admin');
       } else {
         setErrorMsg('Invalid admin credentials. Access denied.');
         setIsLoading(false);
       }
-    }, 300);
+    }, 200);
   };
 
   return (

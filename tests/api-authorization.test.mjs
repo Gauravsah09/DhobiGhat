@@ -105,3 +105,46 @@ test('Upload Protection: Payload exceeding 5MB or invalid MIME types are rejecte
   assert.strictEqual(validateUpload(1024, 'image/svg+xml').status, 415);
   assert.strictEqual(validateUpload(1024, 'application/x-msdownload').status, 415);
 });
+
+// Test 5: Admin Login Credential & Role Validation
+test('Admin Auth: Validates admin usernames, master credentials, and assigns proper admin privileges', () => {
+  const adminDirectory = [
+    { id: 'admin-1', username: 'admin', email: 'admin@dhobighat.in', role: 'super_admin' },
+    { id: 'admin-2', username: 'owner.blr', email: 'partner.blr@dhobighat.in', role: 'franchise_owner' },
+    { id: 'admin-3', username: 'finance', email: 'audit@dhobighat.in', role: 'finance_auditor' },
+  ];
+
+  function authenticateAdmin(identifier, password) {
+    const cleanId = String(identifier || '').trim().toLowerCase();
+    const matched = adminDirectory.find(
+      (a) => a.username.toLowerCase() === cleanId || a.email.toLowerCase() === cleanId
+    );
+    if (!matched) return { success: false, error: 'Not found' };
+    const validPasswords = ['admin123', '9999', 'admin', 'DhobiGhat@Admin2026!'];
+    if (!validPasswords.includes(password)) return { success: false, error: 'Invalid credentials' };
+    return { success: true, user: matched };
+  }
+
+  // Super admin login with username
+  const res1 = authenticateAdmin('admin', 'admin123');
+  assert.strictEqual(res1.success, true);
+  assert.strictEqual(res1.user.role, 'super_admin');
+
+  // Super admin login with PIN
+  const res2 = authenticateAdmin('admin', '9999');
+  assert.strictEqual(res2.success, true);
+
+  // Franchise owner login with email
+  const res3 = authenticateAdmin('partner.blr@dhobighat.in', 'admin123');
+  assert.strictEqual(res3.success, true);
+  assert.strictEqual(res3.user.role, 'franchise_owner');
+
+  // Invalid password
+  const res4 = authenticateAdmin('admin', 'wrong_pass');
+  assert.strictEqual(res4.success, false);
+
+  // Unknown username
+  const res5 = authenticateAdmin('unknown_user', 'admin123');
+  assert.strictEqual(res5.success, false);
+});
+

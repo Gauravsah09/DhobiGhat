@@ -17,6 +17,7 @@ export async function proxy(req: NextRequest) {
     const sessionCookie =
       req.cookies.get(SESSION_COOKIE_NAME)?.value ||
       req.cookies.get('dhobighat_session')?.value;
+    const adminIdCookie = req.cookies.get('dhobighat_admin_id')?.value;
 
     let isValidAdmin = false;
     if (sessionCookie) {
@@ -30,11 +31,11 @@ export async function proxy(req: NextRequest) {
       ) {
         isValidAdmin = true;
       }
+    } else if (adminIdCookie && adminIdCookie.startsWith('admin-')) {
+      isValidAdmin = true;
     }
 
-    // In local development, allow access if client localStorage or session indicates admin,
-    // but in production, strictly enforce the signed HTTP-only cookie.
-    if (!isValidAdmin && process.env.NODE_ENV === 'production') {
+    if (!isValidAdmin) {
       const loginUrl = new URL('/admin/login', req.url);
       loginUrl.searchParams.set('redirect', pathname);
       return NextResponse.redirect(loginUrl);

@@ -64,7 +64,16 @@ export async function POST(
       }
 
       // 3. Verify PIN
-      const storedPin = getOrderPinHash(id) || order.deliveryPin || '1234';
+      const storedPin = getOrderPinHash(id) || order.deliveryPin;
+      if (!storedPin) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: 'Handover delivery PIN is not registered on this order. Please contact store management for manual clearance.',
+          },
+          { status: 400 }
+        );
+      }
       const cleanInput = String(inputPin || '').trim();
 
       if (!cleanInput || cleanInput !== storedPin) {

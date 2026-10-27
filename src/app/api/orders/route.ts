@@ -178,8 +178,13 @@ export async function POST(req: NextRequest) {
     const effectiveChannel = isWalkin ? 'walk_in' : 'online';
     const effectiveStatus: OrderStatus = body.status || (isWalkin ? 'received' : 'order_received');
 
-    // 3. Generate Cryptographically Secure 4-Digit Delivery PIN
-    const rawDeliveryPin = body.deliveryPin || Math.floor(1000 + Math.random() * 9000).toString();
+    // 3. Generate Cryptographically Secure 4-Digit Delivery PIN using CSPRNG
+    let rawDeliveryPin = body.deliveryPin;
+    if (!rawDeliveryPin) {
+      const pinBuf = new Uint32Array(1);
+      globalThis.crypto.getRandomValues(pinBuf);
+      rawDeliveryPin = (1000 + (pinBuf[0] % 9000)).toString();
+    }
 
     // 4. Generate Sequential Monotonic Invoice Number based on Channel
     const existingOrders = getSharedOrders();

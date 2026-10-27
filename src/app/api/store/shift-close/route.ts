@@ -9,6 +9,8 @@ export async function POST(req: NextRequest) {
     const {
       denominations = {},
       shiftType = 'morning',
+      shiftDate,
+      includeAllDates = false,
       staffName = session?.fullName || 'Ramesh Sharma',
       notes = '',
     } = body;
@@ -30,21 +32,30 @@ export async function POST(req: NextRequest) {
       count10 * 10 +
       coins;
 
-    // Calculate system totals from active ledger
+    // Calculate system totals from active ledger filtered by target shift date
     const orders = getSharedOrders();
+    const targetDate = shiftDate || new Date().toISOString().split('T')[0];
     let systemCash = 0;
     let systemUpi = 0;
     let systemPos = 0;
+    let reconciledOrderCount = 0;
 
     orders.forEach((o) => {
       if (o.paymentStatus === 'paid') {
-        const amount = o.paidAmount || o.grandTotal;
-        if (o.paymentMethod === 'bycash' || o.paymentMethod === 'cod' || o.paymentMethod === 'cod_cash') {
-          systemCash += amount;
-        } else if (o.paymentMethod === 'upi_qr' || o.paymentMethod === 'upi_intent' || o.paymentMethod === 'cod_upi' || o.paymentMethod === 'online') {
-          systemUpi += amount;
-        } else if (o.paymentMethod === 'pos_machine' || o.paymentMethod === 'card') {
-          systemPos += amount;
+        const orderDateStr = (o.orderDate || '').split('T')[0];
+        const settledDateStr = (o.settledAt || '').split('T')[0];
+        const isDateMatch = includeAllDates || shiftDate === 'all' || orderDateStr === targetDate || settledDateStr === targetDate;
+
+        if (isDateMatch) {
+          reconciledOrderCount++;
+          const amount = o.paidAmount || o.grandTotal;
+          if (o.paymentMethod === 'bycash' || o.paymentMethod === 'cod' || o.paymentMethod === 'cod_cash') {
+            systemCash += amount;
+          } else if (o.paymentMethod === 'upi_qr' || o.paymentMethod === 'upi_intent' || o.paymentMethod === 'cod_upi' || o.paymentMethod === 'online') {
+            systemUpi += amount;
+          } else if (o.paymentMethod === 'pos_machine' || o.paymentMethod === 'card') {
+            systemPos += amount;
+          }
         }
       }
     });
@@ -57,6 +68,8 @@ export async function POST(req: NextRequest) {
       closedAt: new Date().toISOString(),
       closedBy: staffName,
       shiftType,
+      targetDate,
+      reconciledOrderCount,
       physicalCashTotal,
       systemCash,
       systemUpi,

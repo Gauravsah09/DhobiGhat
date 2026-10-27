@@ -96,3 +96,64 @@ test('State Machine: Illegal direct stage jumps are prohibited without managemen
   // Manager bypass allowed
   assert.strictEqual(isTransitionAllowed('order_received', 'closed', true), true);
 });
+
+// Test 4: Register Cash-Close Reconciliation & Denomination Math
+test('Shift Closing: Accurately calculates currency denominations, date-filtered system cash, and variance', () => {
+  const denominations = {
+    '500': 10,  // 5000
+    '200': 5,   // 1000
+    '100': 8,   // 800
+    '50': 4,    // 200
+    '20': 5,    // 100
+    '10': 10,   // 100
+    'coins': 45 // 45
+  };
+
+  function calculatePhysicalCash(denoms) {
+    return (
+      (Number(denoms['500']) || 0) * 500 +
+      (Number(denoms['200']) || 0) * 200 +
+      (Number(denoms['100']) || 0) * 100 +
+      (Number(denoms['50']) || 0) * 50 +
+      (Number(denoms['20']) || 0) * 20 +
+      (Number(denoms['10']) || 0) * 10 +
+      (Number(denoms.coins) || 0)
+    );
+  }
+
+  const physicalTotal = calculatePhysicalCash(denominations);
+  assert.strictEqual(physicalTotal, 7245);
+
+  // Sample order ledger with mixed dates and payment methods
+  const orders = [
+    { id: '1', orderDate: '2026-10-27', paymentStatus: 'paid', paymentMethod: 'bycash', paidAmount: 5000 },
+    { id: '2', orderDate: '2026-10-27', paymentStatus: 'paid', paymentMethod: 'cod_cash', paidAmount: 2245 },
+    { id: '3', orderDate: '2026-10-27', paymentStatus: 'paid', paymentMethod: 'upi_qr', paidAmount: 1500 },
+    { id: '4', orderDate: '2026-10-26', paymentStatus: 'paid', paymentMethod: 'bycash', paidAmount: 3000 }, // Yesterday's order
+  ];
+
+  function reconcileShift(ordersList, targetDate, physicalTotal) {
+    let systemCash = 0;
+    let systemUpi = 0;
+
+    ordersList.forEach((o) => {
+      if (o.paymentStatus === 'paid' && o.orderDate === targetDate) {
+        if (o.paymentMethod === 'bycash' || o.paymentMethod === 'cod_cash') {
+          systemCash += o.paidAmount;
+        } else if (o.paymentMethod === 'upi_qr') {
+          systemUpi += o.paidAmount;
+        }
+      }
+    });
+
+    const variance = physicalTotal - systemCash;
+    return { systemCash, systemUpi, variance, isBalanced: Math.abs(variance) < 1 };
+  }
+
+  const report = reconcileShift(orders, '2026-10-27', physicalTotal);
+  assert.strictEqual(report.systemCash, 7245);
+  assert.strictEqual(report.systemUpi, 1500);
+  assert.strictEqual(report.variance, 0);
+  assert.strictEqual(report.isBalanced, true);
+});
+

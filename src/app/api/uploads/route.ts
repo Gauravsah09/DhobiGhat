@@ -89,6 +89,13 @@ export async function POST(req: NextRequest) {
 
     // If running in local fallback mode, store in cache so /api/uploads/mock can serve it
     if (!isR2Configured && global.__DHOBIGHAT_UPLOAD_CACHE__) {
+      // Evict oldest entries if cache exceeds 30 items to bound memory usage
+      if (global.__DHOBIGHAT_UPLOAD_CACHE__.size >= 30) {
+        const oldestKey = global.__DHOBIGHAT_UPLOAD_CACHE__.keys().next().value;
+        if (oldestKey) {
+          global.__DHOBIGHAT_UPLOAD_CACHE__.delete(oldestKey);
+        }
+      }
       global.__DHOBIGHAT_UPLOAD_CACHE__.set(objectKey, {
         buffer,
         contentType: fileContentType,

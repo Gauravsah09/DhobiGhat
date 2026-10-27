@@ -676,6 +676,3 @@ export const initialDLTTemplates: DLTSmsTemplate[] = [
   },
 ];
 
-export const initialExpenses: any[] = [];
-export const initialEmployees: any[] = [];
-

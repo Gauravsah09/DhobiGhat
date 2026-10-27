@@ -150,23 +150,11 @@ interface LaundryContextType {
   restockInventory: (id: string, quantity: number) => void;
   dltTemplates: DLTSmsTemplate[];
 
-  // Backward compatibility
+  // Customer & Order Management
   addCustomer: (cust: any) => any;
   updateCustomer: (id: string, cust: any) => void;
   deleteCustomer: (id: string) => void;
-  addClothType: (cloth: any) => any;
-  updateClothType: (id: string, cloth: any) => void;
-  deleteClothType: (id: string) => void;
-  addService: (srv: any) => any;
-  updateService: (id: string, srv: any) => void;
-  deleteService: (id: string) => void;
-  addPriceItem: (item: any) => any;
-  updatePriceItem: (id: string, item: any) => void;
-  deletePriceItem: (id: string) => void;
   deleteOrder: (id: string) => void;
-  expenses: any[];
-  addExpense: (expense: any) => any;
-  deleteExpense: (id: string) => void;
 
   // Utilities
   getNextInvoiceNumber: () => string;
@@ -206,7 +194,6 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
   const [machines, setMachines] = useState<MachineRecord[]>(initialMachines);
   const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory);
   const [dltTemplates] = useState<DLTSmsTemplate[]>(initialDLTTemplates);
-  const [expenses, setExpenses] = useState<any[]>([]);
 
   // Active Sessions - Auth state hydrated dynamically
   const [loggedCustomerPhone, setLoggedCustomerPhone] = useState<string | null>(null);
@@ -1917,19 +1904,6 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     }).catch(() => {});
   };
 
-  const addClothType = (cloth: any) => cloth;
-  const updateClothType = (id: string, cloth: any) => {};
-  const deleteClothType = (id: string) => {};
-  const addService = (srv: any) => srv;
-  const updateService = (id: string, srv: any) => {};
-  const deleteService = (id: string) => {};
-  const addPriceItem = (item: any) => item;
-  const updatePriceItem = (id: string, item: any) => {};
-  const deletePriceItem = (id: string) => {};
-  const addExpense = (exp: any) => exp;
-  const deleteExpense = (id: string) => {};
-
-
   return (
     <LaundryContext.Provider
       value={{
@@ -1983,19 +1957,7 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
         addCustomer,
         updateCustomer,
         deleteCustomer,
-        addClothType,
-        updateClothType,
-        deleteClothType,
-        addService,
-        updateService,
-        deleteService,
-        addPriceItem,
-        updatePriceItem,
-        deletePriceItem,
         deleteOrder,
-        expenses,
-        addExpense,
-        deleteExpense,
         isLoaded,
       }}
     >

@@ -21,17 +21,3 @@ export function getSupabaseAdminClient(): SupabaseClient | null {
   });
 }
 
-/**
- * Returns a user-scoped client applying PostgreSQL Row-Level Security (RLS)
- */
-export function getSupabaseUserClient(authToken?: string): SupabaseClient | null {
-  if (!isSupabaseConfigured) return null;
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-    },
-    auth: {
-      persistSession: false,
-    },
-  });
-}

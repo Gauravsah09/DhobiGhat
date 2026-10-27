@@ -4,14 +4,6 @@ import { initialStaff, initialCustomers, initialAdminUsers } from '@/lib/initial
 import { hasSqlInjection, sanitizePhoneNumber, verifyPassword } from '@/lib/security';
 import { getSharedCustomers } from '@/app/api/customers/route';
 
-// Helper to calculate SHA-256 hash using native Web Crypto API
-async function sha256(message: string): Promise<string> {
-  const msgUint8 = new TextEncoder().encode(message);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();

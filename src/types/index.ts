@@ -274,18 +274,6 @@ export interface Expense {
   remarks?: string;
 }
 
-export interface Employee {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  designation: string;
-  joinDate: string;
-  status: 'enable' | 'disable';
-  role: string;
-}
-
 export type StoreOperatorRole = 
   | 'store_manager' 
   | 'store_operator' 

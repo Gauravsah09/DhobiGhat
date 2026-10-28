@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DhobiGhat - Modern Laundry & Dry Cleaning Management",
-  description: "DhobiGhat - Next-generation cloud-native point of sale, order tracking, and invoice management for dry cleaners and laundry businesses.",
+  title: "DhobiGhat — Precision Garment Care OS",
+  description: "DhobiGhat - Industrial laundry processing, walk-in counter POS, and doorstep logistics dispatch engineered for modern operations.",
 };
 
 export default function RootLayout({
@@ -26,9 +26,17 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-slate-50 text-slate-900 font-sans">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('dhobighat-theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}else{document.documentElement.classList.remove('dark')}}catch(e){}})()`,
+          }}
+        />
+      </head>
+      <body className="min-h-full flex flex-col bg-[var(--c-canvas)] text-[var(--c-ink)] font-mono transition-colors duration-150">
         <LaundryProvider>
           {children}
         </LaundryProvider>

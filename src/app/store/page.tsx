@@ -52,6 +52,7 @@ import {
   Copy
 } from 'lucide-react';
 import { useLaundry } from '@/context/LaundryContext';
+import ThemeToggle from '@/components/ThemeToggle';
 import { 
   Order, 
   GarmentOrderItem, 
@@ -249,6 +250,14 @@ export default function StoreFloorApp() {
   const [intakeItems, setIntakeItems] = useState<GarmentOrderItem[]>([]);
   const [walkinPayment, setWalkinPayment] = useState<'bycash' | 'upi_qr' | 'pos_machine'>('upi_qr');
   const [lastCreatedWalkin, setLastCreatedWalkin] = useState<Order | null>(null);
+  const [printingOrder, setPrintingOrder] = useState<Order | null>(null);
+
+  const handlePrintReceipt = (order: Order) => {
+    setPrintingOrder(order);
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
 
   // POS Machine & Soundbox state
   const [posCharging, setPosCharging] = useState(false);
@@ -664,10 +673,10 @@ export default function StoreFloorApp() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[var(--c-canvas)] text-[var(--c-ink)] flex flex-col font-mono transition-colors duration-150">
       
       {/* Top Floor Bar with Operator RBAC & Role Switcher */}
-      <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 sm:px-6 py-2.5">
+      <header className="sticky top-0 z-40 bg-[var(--c-canvas-surface)]/95 backdrop-blur-md border-b border-[var(--c-border)] px-4 sm:px-6 py-2.5 no-print">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           
           <div className="flex items-center gap-3">
@@ -734,7 +743,7 @@ export default function StoreFloorApp() {
             }`}
           >
             <Truck className="w-4 h-4" />
-            <span>📱 Online Orders Pipeline ({onlineOrders.length})</span>
+            <span>Online Orders Pipeline ({onlineOrders.length})</span>
           </button>
 
           <button
@@ -747,7 +756,7 @@ export default function StoreFloorApp() {
             }`}
           >
             <Building2 className="w-4 h-4" />
-            <span>🏬 Walk-in Counter Orders ({walkinOrders.length})</span>
+            <span>Walk-in Counter Orders ({walkinOrders.length})</span>
           </button>
 
           <button
@@ -760,7 +769,7 @@ export default function StoreFloorApp() {
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>🧺 Floor Processing Racks (Stages 1-6)</span>
+            <span>Floor Processing Racks (Stages 1-6)</span>
           </button>
 
           <button
@@ -773,7 +782,7 @@ export default function StoreFloorApp() {
             }`}
           >
             <Banknote className="w-4 h-4" />
-            <span>💵 Day-End Cash & UPI Close</span>
+            <span>Day-End Cash & UPI Close</span>
           </button>
         </div>
       </div>
@@ -1245,7 +1254,7 @@ export default function StoreFloorApp() {
                               ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                               : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
                           }`}>
-                            {isAuth ? '✓ Authorized for your role' : '🔒 Role Restricted'}
+                            {isAuth ? '✓ Authorized for your role' : '[Restricted] Role Restricted'}
                           </span>
                           <button
                             type="button"
@@ -1314,7 +1323,7 @@ export default function StoreFloorApp() {
                               </div>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                🔒 Requires Store Operator or Manager
+                                [Restricted] Requires Store Operator or Manager
                               </span>
                             )
                           )}
@@ -1358,7 +1367,7 @@ export default function StoreFloorApp() {
                                 </button>
                               ) : (
                                 <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                  🔒 Requires Store Operator or Manager
+                                  [Restricted] Requires Store Operator or Manager
                                 </span>
                               )}
                             </div>
@@ -1428,7 +1437,7 @@ export default function StoreFloorApp() {
                                 </div>
                               ) : (
                                 <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                  🔒 Requires Rider to collect & weigh clothes at customer doorstep
+                                  [Restricted] Requires Rider to collect & weigh clothes at customer doorstep
                                 </span>
                               )}
                             </div>
@@ -1447,7 +1456,7 @@ export default function StoreFloorApp() {
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                🔒 Requires Rider Delivery to Store
+                                [Restricted] Requires Rider Delivery to Store
                               </span>
                             )
                           )}
@@ -1465,7 +1474,7 @@ export default function StoreFloorApp() {
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                🔒 Requires Store Operator or Manager to Check-In to Floor
+                                [Restricted] Requires Store Operator or Manager to Check-In to Floor
                               </span>
                             )
                           )}
@@ -1483,7 +1492,7 @@ export default function StoreFloorApp() {
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                🔒 Requires Floor Worker or Manager
+                                [Restricted] Requires Floor Worker or Manager
                               </span>
                             )
                           )}
@@ -1500,7 +1509,7 @@ export default function StoreFloorApp() {
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                🔒 Requires Floor Worker or Manager
+                                [Restricted] Requires Floor Worker or Manager
                               </span>
                             )
                           )}
@@ -1517,7 +1526,7 @@ export default function StoreFloorApp() {
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                🔒 Requires Floor Worker or Manager
+                                [Restricted] Requires Floor Worker or Manager
                               </span>
                             )
                           )}
@@ -1534,7 +1543,7 @@ export default function StoreFloorApp() {
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                🔒 Requires Floor Worker or Manager
+                                [Restricted] Requires Floor Worker or Manager
                               </span>
                             )
                           )}
@@ -1551,7 +1560,7 @@ export default function StoreFloorApp() {
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                🔒 Requires Floor Worker or Manager
+                                [Restricted] Requires Floor Worker or Manager
                               </span>
                             )
                           )}
@@ -1598,7 +1607,7 @@ export default function StoreFloorApp() {
                                 </div>
                               ) : (
                                 <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                  🔒 Requires Store Operator or Manager to Assign Drop Rider
+                                  [Restricted] Requires Store Operator or Manager to Assign Drop Rider
                                 </span>
                               )}
                             </div>
@@ -1635,7 +1644,7 @@ export default function StoreFloorApp() {
 
                               {currentRole === 'worker' && (
                                 <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                  🔒 Requires Store Operator (Assign Drop) or Rider (Dispatch)
+                                  [Restricted] Requires Store Operator (Assign Drop) or Rider (Dispatch)
                                 </span>
                               )}
                             </div>
@@ -1675,7 +1684,7 @@ export default function StoreFloorApp() {
                               </div>
                             ) : (
                               <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                🔒 Requires Delivery Rider (Payment & Delivery Handover)
+                                [Restricted] Requires Delivery Rider (Payment & Delivery Handover)
                               </span>
                             )
                           )}
@@ -1726,7 +1735,7 @@ export default function StoreFloorApp() {
                                 </button>
                               ) : (
                                 <span className="text-xs text-slate-400 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
-                                  🔒 Store Manager resolution required to clear dispute
+                                  [Restricted] Store Manager resolution required to clear dispute
                                 </span>
                               )}
                             </div>
@@ -2059,7 +2068,7 @@ export default function StoreFloorApp() {
                     </button>
                   ) : (
                     <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs text-center font-bold">
-                      🔒 Walk-in Counter POS is restricted to Store Operator & Store Manager.
+                      [Restricted] Walk-in Counter POS is restricted to Store Operator & Store Manager.
                     </div>
                   )}
                 </div>
@@ -2078,7 +2087,8 @@ export default function StoreFloorApp() {
               {lastCreatedWalkin && (
                 <div className="p-4 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex justify-between items-center">
                   <div>
-                    <span className="font-bold block">✓ Walk-in Order #{lastCreatedWalkin.invoiceNo} Registered!</span>
+                    <span className="font-bold block">Walk-in Order #{lastCreatedWalkin.invoiceNo} Registered!</span>
+                    <button type="button" onClick={() => handlePrintReceipt(lastCreatedWalkin)} className="mt-2 px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs inline-flex items-center gap-1.5 cursor-pointer no-print"><Printer className="w-3.5 h-3.5" /><span>Print Thermal Receipt</span></button>
                     <span>Printed tags for {lastCreatedWalkin.totalQty} garments. Moved to Received queue.</span>
                   </div>
                   <button
@@ -2369,11 +2379,53 @@ export default function StoreFloorApp() {
               </button>
             ) : (
               <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs text-center font-bold">
-                🔒 Shift Register closing is restricted to Store Operator & Store Manager.
+                [Restricted] Shift Register closing is restricted to Store Operator & Store Manager.
               </div>
             )}
           </div>
         )}
+
+      
+      {/* Print-Only Thermal Invoice Receipt Container */}
+      {printingOrder && (
+        <div className="print-only hidden font-mono text-black bg-white p-6 max-w-[80mm] mx-auto text-xs leading-normal">
+          <div className="text-center pb-3 border-b border-black">
+            <div className="font-bold text-base tracking-tight">DHOBIGHAT LAUNDRY</div>
+            <div className="text-[11px]">{staff?.storeName || 'Store Counter POS'}</div>
+            <div className="text-[11px] font-bold mt-1">INVOICE #{printingOrder.invoiceNo}</div>
+            <div className="text-[10px]">Date: {printingOrder.orderDate}</div>
+          </div>
+          <div className="py-2 border-b border-black text-[11px]">
+            <div>Customer: {printingOrder.customerName}</div>
+            <div>Mobile: {printingOrder.customerPhone}</div>
+          </div>
+          <table className="w-full my-3 text-left text-[11px] border-collapse">
+            <thead>
+              <tr className="border-b border-black">
+                <th className="py-1">Garment</th>
+                <th className="py-1 text-right">Qty</th>
+                <th className="py-1 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {printingOrder.items?.map((it, idx) => (
+                <tr key={idx} className="border-b border-gray-200">
+                  <td className="py-1">{it.clothName} ({it.serviceName})</td>
+                  <td className="py-1 text-right">{it.quantity}</td>
+                  <td className="py-1 text-right">{formatCurrency(it.total, settings.currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="pt-2 border-t border-black text-right font-bold text-xs">
+            <div>Grand Total: {formatCurrency(printingOrder.grandTotal, settings.currency)}</div>
+            <div className="text-[10px] font-normal">Mode: {(printingOrder.paymentMethod || 'cash').toUpperCase()} ({(printingOrder.paymentStatus || 'pending').toUpperCase()})</div>
+          </div>
+          <div className="text-center pt-4 text-[10px] text-gray-700">
+            Thank you for choosing DhobiGhat!
+          </div>
+        </div>
+      )}
 
       </main>
 
@@ -2423,8 +2475,8 @@ export default function StoreFloorApp() {
                   onChange={(e) => setSelectedSlotWindow(e.target.value as any)}
                   className="w-full px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
                 >
-                  <option value="Morning">🌅 Morning Slot (07:00 AM - 10:00 AM)</option>
-                  <option value="Evening">🌇 Evening Slot (04:00 PM - 07:00 PM)</option>
+                  <option value="Morning">Morning Slot (07:00 AM - 10:00 AM)</option>
+                  <option value="Evening">Evening Slot (04:00 PM - 07:00 PM)</option>
                 </select>
               </div>
 
@@ -2617,10 +2669,10 @@ export default function StoreFloorApp() {
                   onChange={(e) => setDropSlotWindow(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-white"
                 >
-                  <option value="Morning (07:00 AM - 10:00 AM)">🌅 Morning (07:00 AM - 10:00 AM)</option>
+                  <option value="Morning (07:00 AM - 10:00 AM)">Morning (07:00 AM - 10:00 AM)</option>
                   <option value="Morning (10:00 AM - 01:00 PM)">☀️ Morning (10:00 AM - 01:00 PM)</option>
-                  <option value="Evening (04:00 PM - 07:00 PM)">🌇 Evening (04:00 PM - 07:00 PM)</option>
-                  <option value="Evening (07:00 PM - 10:00 PM)">🌙 Evening (07:00 PM - 10:00 PM)</option>
+                  <option value="Evening (04:00 PM - 07:00 PM)">Evening (04:00 PM - 07:00 PM)</option>
+                  <option value="Evening (07:00 PM - 10:00 PM)">Evening (07:00 PM - 10:00 PM)</option>
                 </select>
               </div>
 
@@ -3027,11 +3079,11 @@ export default function StoreFloorApp() {
                   })}
                   className="w-full p-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white font-bold"
                 >
-                  <option value="pine_labs">🌲 Pine Labs Plutus (Android A920 / Ingenico)</option>
-                  <option value="paytm_pos">💳 Paytm All-in-One Android POS</option>
+                  <option value="pine_labs">Pine Labs Plutus (Android A920 / Ingenico)</option>
+                  <option value="paytm_pos">Paytm All-in-One Android POS</option>
                   <option value="mosambee">⚡ Mosambee MPOS Terminal</option>
-                  <option value="razorpay_pos">🚀 Razorpay POS Smart Terminal</option>
-                  <option value="ingenico_pax">📟 PAX / Ingenico Network Terminal</option>
+                  <option value="razorpay_pos">Razorpay POS Smart Terminal</option>
+                  <option value="ingenico_pax">PAX / Ingenico Network Terminal</option>
                 </select>
               </div>
 
@@ -3051,9 +3103,9 @@ export default function StoreFloorApp() {
                   })}
                   className="w-full p-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white font-bold"
                 >
-                  <option value="lan_wifi">🌐 LAN / Local WiFi IP Socket (Recommended)</option>
-                  <option value="bluetooth">📶 Bluetooth Serial (BT-EDC-POS)</option>
-                  <option value="usb_serial">🔌 USB Serial Cable (COM3 / 115200 Baud)</option>
+                  <option value="lan_wifi">LAN / Local WiFi IP Socket (Recommended)</option>
+                  <option value="bluetooth">Bluetooth Serial (BT-EDC-POS)</option>
+                  <option value="usb_serial">USB Serial Cable (COM3 / 115200 Baud)</option>
                   <option value="cloud_api">☁️ Cloud Terminal Push API</option>
                 </select>
               </div>
@@ -3265,7 +3317,7 @@ export default function StoreFloorApp() {
                 >
                   <option value="damage">⚠️ Fabric Tear / Damage</option>
                   <option value="stain_not_removed">🫧 Stain Not Removed / Bleed</option>
-                  <option value="missing_item">🔍 Missing Garment / Item</option>
+                  <option value="missing_item">Missing Garment / Item</option>
                   <option value="weight_mismatch">⚖️ Weight or Count Mismatch</option>
                 </select>
               </div>

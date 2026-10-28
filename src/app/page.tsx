@@ -4,141 +4,190 @@ import React from 'react';
 import Link from 'next/link';
 import { 
   Shirt, 
-  Smartphone, 
-  Building2, 
+  Store, 
   ShieldCheck, 
   ArrowRight,
-  Sparkles
+  Sparkles,
+  Truck,
+  CheckCircle2,
+  Clock
 } from 'lucide-react';
+import ThemeToggle from '@/components/ThemeToggle';
+import { EditorialButton, EditorialCard } from '@/components/editorial/Primitives';
 
 export default function MainPage() {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between font-sans selection:bg-sky-500 selection:text-white relative overflow-hidden">
+    <div className="min-h-screen bg-[var(--c-canvas)] text-[var(--c-ink)] flex flex-col justify-between font-mono selection:bg-amber-500 selection:text-white transition-colors duration-150">
       
-      {/* Background Ambient Glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-gradient-to-tr from-sky-600/15 via-indigo-600/10 to-purple-600/15 blur-3xl pointer-events-none rounded-full" />
-
-      {/* Top Subtle Brand Bar */}
-      <header className="relative z-10 max-w-6xl w-full mx-auto px-6 pt-8 flex items-center justify-between">
+      {/* Top Technical Header */}
+      <header className="relative z-10 max-w-6xl w-full mx-auto px-6 pt-8 flex items-center justify-between border-b border-[var(--c-border)] pb-6">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-sky-500/25">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-sm">
             <Shirt className="w-5 h-5 stroke-[2.2]" />
           </div>
           <div>
-            <span className="text-lg font-black tracking-tight text-white block leading-tight">
-              DhobiGhat Enterprise
+            <span className="text-base font-bold tracking-tight text-[var(--c-ink)] block leading-tight">
+              DHOBIGHAT // OS
             </span>
-            <span className="text-[10px] font-extrabold uppercase tracking-widest text-sky-400">
-              Modern Laundry & Dry Cleaning OS
+            <span className="text-[10px] font-medium tracking-wider text-[var(--c-ink-faint)] uppercase">
+              Precision Garment Processing & Logistics
             </span>
           </div>
         </div>
 
-        <div className="hidden sm:flex items-center gap-2 text-xs font-bold text-slate-400 bg-slate-900/80 px-3 py-1.5 rounded-full border border-slate-800">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Enterprise Secure Cloud Platform</span>
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:inline-flex items-center gap-2 text-xs text-[var(--c-ink-muted)] bg-[var(--c-canvas-sunken)] px-3 py-1.5 rounded-full border border-[var(--c-border)]">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>HUBS ONLINE: 100% DISPATCH</span>
+          </div>
+          <ThemeToggle />
         </div>
       </header>
 
-      {/* Central Content: Brand Name, Description & 1-Liner Login Section */}
-      <main className="relative z-10 max-w-4xl w-full mx-auto px-6 py-12 flex flex-col items-center text-center space-y-8">
+      {/* Main Hero & Portals */}
+      <main className="relative z-10 max-w-5xl w-full mx-auto px-6 py-12 flex flex-col items-center text-center space-y-10">
         
-        {/* Badge */}
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-sky-500/10 border border-sky-400/30 text-sky-400 text-xs font-bold">
+        {/* Kicker Tag */}
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--c-canvas-sunken)] border border-[var(--c-border)] text-[var(--c-accent)] text-xs font-medium">
           <Sparkles className="w-3.5 h-3.5" />
-          <span>DhobiGhat Enterprise Platform</span>
+          <span>[ SYSTEM STATUS: ALL LAUNDRY HUBS OPERATIONAL ]</span>
         </div>
 
-        {/* Brand Name */}
-        <div className="space-y-3">
-          <h1 className="text-4xl sm:text-6xl font-black tracking-tight text-white">
-            DhobiGhat Enterprise
+        {/* Hero Title & Mission */}
+        <div className="space-y-4 max-w-3xl">
+          <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-[var(--c-ink)] leading-[1.15]">
+            DhobiGhat — Precision Garment Care OS
           </h1>
-          <p className="max-w-2xl mx-auto text-slate-300 text-base sm:text-lg leading-relaxed font-normal">
-            Next-generation enterprise point-of-sale, doorstep logistics dispatch, and floor garment processing platform built for modern laundry and dry cleaning operations.
+          <p className="max-w-2xl mx-auto text-[var(--c-ink-muted)] text-sm sm:text-base leading-relaxed font-normal">
+            Industrial fabric processing, walk-in counter point-of-sale, and doorstep logistics dispatch engineered for modern laundry and dry cleaning operations.
           </p>
         </div>
 
-        {/* Login Section: Clean 1-Liner Row */}
-        <div className="w-full pt-4 space-y-4">
-          <div className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
-            Select Portal to Sign In
+        {/* Three Operational Gateway Portals */}
+        <div className="w-full space-y-4 pt-2">
+          <div className="text-xs font-semibold uppercase tracking-wider text-[var(--c-ink-faint)] text-left max-w-4xl mx-auto">
+            SELECT ACCESS WORKSPACE
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 max-w-3xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-4xl mx-auto">
             
-            {/* Customer Login */}
-            <Link
-              href="/customer/auth"
-              id="customer-login-portal-btn"
-              className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-sky-500/60 hover:bg-slate-900 text-left transition-all hover:shadow-xl hover:shadow-sky-500/10 group flex items-center justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20 flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <Smartphone className="w-5 h-5" />
+            {/* Customer Portal */}
+            <EditorialCard className="p-6 text-left flex flex-col justify-between hover:border-[var(--c-accent)] transition-colors group">
+              <div className="space-y-4">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center justify-center">
+                  <Shirt className="w-5 h-5 stroke-[2]" />
                 </div>
                 <div>
-                  <div className="text-sm font-extrabold text-white group-hover:text-sky-300 transition-colors">
-                    Customer Login
-                  </div>
-                  <div className="text-[11px] text-slate-400">Bookings & Tracking</div>
+                  <h2 className="text-lg font-bold text-[var(--c-ink)]">
+                    Customer Lounge
+                  </h2>
+                  <p className="text-xs text-[var(--c-ink-muted)] mt-1 leading-relaxed">
+                    Doorstep laundry booking, live stage tracking, digital payment & itemized rates.
+                  </p>
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-sky-400 group-hover:translate-x-0.5 transition-all" />
-            </Link>
 
-            {/* Store Staff Login */}
-            <Link
-              href="/store/login"
-              id="store-staff-login-portal-btn"
-              className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-emerald-500/60 hover:bg-slate-900 text-left transition-all hover:shadow-xl hover:shadow-emerald-500/10 group flex items-center justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <Building2 className="w-5 h-5" />
+              <div className="pt-6">
+                <Link href="/customer" id="customer-portal-link" className="w-full block">
+                  <EditorialButton variant="primary" size="sm" className="w-full justify-between group-hover:ring-2 group-hover:ring-amber-500/50">
+                    <span>Enter Customer Portal</span>
+                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                  </EditorialButton>
+                </Link>
+              </div>
+            </EditorialCard>
+
+            {/* Store Counter POS */}
+            <EditorialCard className="p-6 text-left flex flex-col justify-between hover:border-[var(--c-accent)] transition-colors group">
+              <div className="space-y-4">
+                <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 flex items-center justify-center">
+                  <Store className="w-5 h-5 stroke-[2]" />
                 </div>
                 <div>
-                  <div className="text-sm font-extrabold text-white group-hover:text-emerald-300 transition-colors">
-                    Store Staff Login
-                  </div>
-                  <div className="text-[11px] text-slate-400">Floor POS & Dispatch</div>
+                  <h2 className="text-lg font-bold text-[var(--c-ink)]">
+                    Store Counter POS
+                  </h2>
+                  <p className="text-xs text-[var(--c-ink-muted)] mt-1 leading-relaxed">
+                    Walk-in order intake, rapid piece counting, UPI QR collection, and instant thermal receipt printing.
+                  </p>
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-400 group-hover:translate-x-0.5 transition-all" />
-            </Link>
 
-            {/* Admin Login */}
-            <Link
-              href="/admin/login"
-              id="admin-login-portal-btn"
-              className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-purple-500/60 hover:bg-slate-900 text-left transition-all hover:shadow-xl hover:shadow-purple-500/10 group flex items-center justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <ShieldCheck className="w-5 h-5" />
+              <div className="pt-6">
+                <Link href="/store" id="store-portal-link" className="w-full block">
+                  <EditorialButton variant="primary" size="sm" className="w-full justify-between group-hover:ring-2 group-hover:ring-amber-500/50">
+                    <span>Open Store Register</span>
+                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                  </EditorialButton>
+                </Link>
+              </div>
+            </EditorialCard>
+
+            {/* Admin HQ */}
+            <EditorialCard className="p-6 text-left flex flex-col justify-between hover:border-[var(--c-accent)] transition-colors group">
+              <div className="space-y-4">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5 stroke-[2]" />
                 </div>
                 <div>
-                  <div className="text-sm font-extrabold text-white group-hover:text-purple-300 transition-colors">
-                    Admin Login
-                  </div>
-                  <div className="text-[11px] text-slate-400">Executive Desk & HQ</div>
+                  <h2 className="text-lg font-bold text-[var(--c-ink)]">
+                    Operations HQ
+                  </h2>
+                  <p className="text-xs text-[var(--c-ink-muted)] mt-1 leading-relaxed">
+                    Factory pipeline telemetry, driver dispatch queues, shift cash reconciliation & audit logging.
+                  </p>
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-purple-400 group-hover:translate-x-0.5 transition-all" />
-            </Link>
 
+              <div className="pt-6">
+                <Link href="/admin" id="admin-portal-link" className="w-full block">
+                  <EditorialButton variant="primary" size="sm" className="w-full justify-between group-hover:ring-2 group-hover:ring-amber-500/50">
+                    <span>Launch Admin Console</span>
+                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                  </EditorialButton>
+                </Link>
+              </div>
+            </EditorialCard>
+
+          </div>
+        </div>
+
+        {/* Operational Quality Badges */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl w-full pt-4">
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-[var(--c-canvas-sunken)] border border-[var(--c-border)] text-left">
+            <Clock className="w-4 h-4 text-[var(--c-accent)] shrink-0" />
+            <div className="text-xs">
+              <div className="font-bold text-[var(--c-ink)]">24-48h Express</div>
+              <div className="text-[var(--c-ink-faint)]">Standard Turnaround</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-[var(--c-canvas-sunken)] border border-[var(--c-border)] text-left">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+            <div className="text-xs">
+              <div className="font-bold text-[var(--c-ink)]">Organic Solvents</div>
+              <div className="text-[var(--c-ink-faint)]">Eco-Safe Garment Care</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-[var(--c-canvas-sunken)] border border-[var(--c-border)] text-left">
+            <Truck className="w-4 h-4 text-sky-500 shrink-0" />
+            <div className="text-xs">
+              <div className="font-bold text-[var(--c-ink)]">Doorstep Logistics</div>
+              <div className="text-[var(--c-ink-faint)]">PIN-Verified Delivery</div>
+            </div>
           </div>
         </div>
 
       </main>
 
       {/* Footer */}
-      <footer className="relative z-10 max-w-6xl w-full mx-auto px-6 py-6 border-t border-slate-900 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
-        <div>© 2026 DhobiGhat Enterprise. All rights reserved.</div>
-        <div className="flex items-center gap-4 text-[11px] text-slate-400">
-          <span>Enterprise Logistics Engine</span>
-          <span>•</span>
-          <span>Zero-Local-Storage Architecture</span>
+      <footer className="relative z-10 max-w-6xl w-full mx-auto px-6 py-6 border-t border-[var(--c-border)] text-xs text-[var(--c-ink-faint)] flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div>© 2026 DhobiGhat Precision Garment Care OS. Built for operations.</div>
+        <div className="flex items-center gap-4 text-[11px]">
+          <span>Industrial Pipeline</span>
+          <span>//</span>
+          <span>Thermal POS Ready</span>
+          <span>//</span>
+          <span>Zero-FOUC Dual Theme</span>
         </div>
       </footer>
 

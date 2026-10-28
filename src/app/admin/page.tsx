@@ -44,6 +44,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { useLaundry } from '@/context/LaundryContext';
+import ThemeToggle from '@/components/ThemeToggle';
 import { Order, OrderStatus, StoreStaff, StoreOperatorRole, PaymentMethod, CustomerUser, IndianAddress } from '@/types';
 import { formatCurrency } from '@/lib/utils';
 
@@ -208,7 +209,7 @@ export default function AdminConsoleApp() {
   // Hydration state check
   if (!isLoaded) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 font-sans">
+      <div className="min-h-screen bg-[var(--c-canvas)] text-[var(--c-ink)] flex flex-col items-center justify-center p-4 font-mono transition-colors duration-150">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-xs text-slate-400 font-mono">Verifying Administrator Session...</p>
@@ -220,7 +221,7 @@ export default function AdminConsoleApp() {
   // Unauthenticated Guard
   if (!isAdminLoggedIn || !admin) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 font-sans">
+      <div className="min-h-screen bg-[var(--c-canvas)] text-[var(--c-ink)] flex flex-col items-center justify-center p-4 font-mono transition-colors duration-150">
         <div className="max-w-md w-full text-center space-y-5 rounded-3xl bg-slate-900 border border-slate-800 p-8 shadow-2xl">
           <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto">
             <ShieldCheck className="w-8 h-8" />
@@ -254,10 +255,10 @@ export default function AdminConsoleApp() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[var(--c-canvas)] text-[var(--c-ink)] flex flex-col font-mono transition-colors duration-150">
       
       {/* Admin Executive Header */}
-      <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md px-4 sm:px-6 py-3 sticky top-0 z-40">
+      <header className="border-b border-[var(--c-border)] bg-[var(--c-canvas-surface)]/95 backdrop-blur-md px-4 sm:px-6 py-3 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
           
           <div className="flex items-center gap-3">

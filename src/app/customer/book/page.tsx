@@ -381,21 +381,21 @@ function CustomerBookingContent() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+    <div className="min-h-screen bg-[var(--c-canvas)] text-[var(--c-ink)] flex flex-col font-mono transition-colors duration-150">
       <CustomerNavbar />
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-8 sm:px-6">
 
         {/* Title & Trust Header */}
         <div className="mb-8">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-100 text-sky-800 text-xs font-bold mb-2">
-            <CalendarPlus className="w-3.5 h-3.5 text-sky-600" />
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 text-xs font-bold mb-2">
+            <CalendarPlus className="w-3.5 h-3.5 text-amber-600" />
             Book Laundry & Dry Cleaning Pickup
           </span>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-black text-[var(--c-ink)] tracking-tight">
             Schedule Doorstep Collection
           </h1>
-          <p className="text-slate-500 text-sm mt-1">
+          <p className="text-[var(--c-ink-muted)] text-sm mt-1">
             Choose your preferred plan, pick a convenient Morning or Evening slot, and relax.
           </p>
         </div>
@@ -406,38 +406,38 @@ function CustomerBookingContent() {
           <div className="lg:col-span-2 space-y-6">
 
             {/* 1. Rate Card Selection: Per-Kg vs Per-Piece */}
-            <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/80 shadow-xs space-y-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div className="bg-[var(--c-canvas-surface)] rounded-3xl p-6 sm:p-7 border border-[var(--c-border)] shadow-xs space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--c-border)] pb-4">
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--c-ink)]">
                     1. Choose Laundry Service Rate Card
                   </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Select how you want your clothes charged</p>
+                  <p className="text-xs text-[var(--c-ink-muted)] mt-0.5">Select how you want your clothes charged</p>
                 </div>
 
                 {/* Plan Toggle */}
-                <div className="flex bg-slate-100 p-1 rounded-2xl text-xs font-bold">
+                <div className="flex bg-[var(--c-canvas-sunken)] p-1 rounded-2xl text-xs font-bold border border-[var(--c-border)]">
                   <button
                     type="button"
                     onClick={() => setBookingMode('per_kg')}
-                    className={`px-4 py-2 rounded-xl transition-all ${
+                    className={`px-4 py-2 rounded-xl transition-all cursor-pointer ${
                       bookingMode === 'per_kg'
-                        ? 'bg-sky-600 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'text-[var(--c-ink-muted)] hover:text-[var(--c-ink)]'
                     }`}
                   >
-                    ⚖️ Per Kg (Wash & Fold)
+                    Per Kg (Wash & Fold)
                   </button>
                   <button
                     type="button"
                     onClick={() => setBookingMode('per_piece')}
-                    className={`px-4 py-2 rounded-xl transition-all ${
+                    className={`px-4 py-2 rounded-xl transition-all cursor-pointer ${
                       bookingMode === 'per_piece'
-                        ? 'bg-sky-600 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'text-[var(--c-ink-muted)] hover:text-[var(--c-ink)]'
                     }`}
                   >
-                    👔 Per Piece (Dry Clean / Iron)
+                    Per Piece (Dry Clean / Iron)
                   </button>
                 </div>
               </div>

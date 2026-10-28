@@ -294,12 +294,12 @@ function CustomerOrdersContent() {
   // Loading state while session & orders hydrate
   if (!isLoaded) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      <div className="min-h-screen bg-[var(--c-canvas)] text-[var(--c-ink)] flex flex-col font-mono transition-colors duration-150">
         <CustomerNavbar />
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-24 flex flex-col items-center justify-center">
-          <div className="flex flex-col items-center gap-3 text-slate-500">
-            <div className="w-10 h-10 border-4 border-sky-600 border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs font-bold text-slate-600">Loading your orders...</p>
+          <div className="flex flex-col items-center gap-3 text-[var(--c-ink-muted)]">
+            <div className="w-10 h-10 border-4 border-amber-600 border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs font-bold text-[var(--c-ink)]">Loading your orders...</p>
           </div>
         </main>
       </div>
@@ -309,30 +309,30 @@ function CustomerOrdersContent() {
   // STRICT AUTHENTICATION GATE: Never expose orders or invoices to unauthenticated visitors
   if (!user || !isLoggedIn) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      <div className="min-h-screen bg-[var(--c-canvas)] text-[var(--c-ink)] flex flex-col font-mono transition-colors duration-150">
         <CustomerNavbar />
 
         <main className="flex-1 max-w-lg w-full mx-auto px-4 py-16 flex flex-col justify-center">
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-xl space-y-6">
+          <div className="bg-[var(--c-canvas-surface)] rounded-3xl border border-[var(--c-border)] p-6 sm:p-8 shadow-xl space-y-6">
             <div className="text-center space-y-3">
-              <div className="w-14 h-14 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center mx-auto border border-sky-100 shadow-sm">
-                <ShieldAlert className="w-7 h-7 text-sky-600" />
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto border border-amber-500/20 shadow-sm">
+                <ShieldAlert className="w-7 h-7 text-amber-600" />
               </div>
-              <span className="inline-block text-[10px] font-extrabold uppercase px-3 py-1 rounded-full bg-sky-100 text-sky-800 tracking-wider">
+              <span className="inline-block text-[10px] font-extrabold uppercase px-3 py-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 tracking-wider">
                 Authentication Required
               </span>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Protected Order Access</h1>
-              <p className="text-xs text-slate-500 leading-relaxed max-w-sm mx-auto">
+              <h1 className="text-2xl font-black text-[var(--c-ink)] tracking-tight">Protected Order Access</h1>
+              <p className="text-xs text-[var(--c-ink-muted)] leading-relaxed max-w-sm mx-auto">
                 Direct access to customer invoices and data via public link is restricted. Please sign in with your customer account password to view your active bookings and order tracking.
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+            <div className="p-4 rounded-2xl bg-[var(--c-canvas-sunken)] border border-[var(--c-border)] space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-[var(--c-ink)]">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>Zero Data Exposure Guarantee</span>
               </div>
-              <p className="text-[11px] text-slate-500 leading-normal">
+              <p className="text-[11px] text-[var(--c-ink-muted)] leading-normal">
                 Your invoices, clothes list, delivery addresses, and handover PINs are strictly private and accessible only when signed in to your account.
               </p>
             </div>
@@ -340,7 +340,7 @@ function CustomerOrdersContent() {
             <div className="space-y-3">
               <Link
                 href="/customer/auth?redirect=/customer/orders"
-                className="w-full py-3 rounded-2xl bg-sky-600 hover:bg-sky-500 text-white font-black text-xs shadow-lg shadow-sky-600/25 text-center flex items-center justify-center gap-2 transition-all cursor-pointer"
+                className="w-full py-3 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow-lg shadow-amber-600/25 text-center flex items-center justify-center gap-2 transition-all cursor-pointer"
               >
                 <span>Sign In with Password / Register</span>
                 <ArrowRight className="w-4 h-4" />
@@ -348,7 +348,7 @@ function CustomerOrdersContent() {
 
               <Link
                 href="/customer"
-                className="block text-center text-xs font-bold text-slate-500 hover:text-slate-800 py-1 transition-colors"
+                className="block text-center text-xs font-bold text-[var(--c-ink-faint)] hover:text-[var(--c-ink)] py-1 transition-colors"
               >
                 ← Return to Customer Home
               </Link>
@@ -360,7 +360,7 @@ function CustomerOrdersContent() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+    <div className="min-h-screen bg-[var(--c-canvas)] text-[var(--c-ink)] flex flex-col font-mono transition-colors duration-150">
       <CustomerNavbar />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-8 sm:px-6">

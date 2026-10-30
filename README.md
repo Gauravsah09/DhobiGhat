@@ -193,7 +193,10 @@ DhobiGhat/
 ├── sentry.client.config.ts         # Sentry client exception reporting
 ├── sentry.server.config.ts         # Sentry server exception reporting
 ├── supabase-schema.sql             # PostgreSQL 16 schema, RLS policies & seed data
-├── test-regression.mjs             # End-to-end regression & concurrency test suite
+├── tests/                          # Automated Node.js native test suite (13 tests)
+│   ├── api-authorization.test.mjs  # RBAC, deletion guards & PIN privacy
+│   ├── order-logistics.test.mjs    # Channel isolation & state transitions
+│   └── security-fixes.test.mjs     # XSS, SQLi, JWT & salted password security
 ├── package.json                    # Dependencies & scripts
 ├── tsconfig.json                   # Strict TypeScript compiler options
 └── src/
@@ -291,17 +294,19 @@ npm start
 A production-ready multi-stage Docker build is included:
 
 ```bash
-# Build and run container in background
-docker-compose up -d --build
+# Build and run container in background (Docker Compose v2)
+docker compose up -d --build
+
+# (Or with legacy Docker Compose v1: docker-compose up -d --build)
 
 # Inspect container health and logs
-docker-compose logs -f
+docker compose logs -f
 
 # Stop container
-docker-compose down
+docker compose down
 ```
 
-Access the app at **`http://localhost:3000`**.
+Access the app at **`http://localhost:3000`** (container: `laundry-modern-pos`).
 
 ---
 
@@ -378,15 +383,18 @@ To configure 24/7 uptime monitoring at zero cost:
 
 ## 📖 Operating Workflows (Step-by-Step)
 
-### Flow 1: Customer Doorstep Pickup Booking
-1. Open `/customer` and click **Book Doorstep Pickup** (or direct to `/customer/book`).
-2. Add garments to cart (e.g., 3x Shirts, 1x Silk Saree) and select service (Dry Cleaning, Premium Wash, Steam Press).
-3. Select pickup date and slot:
+> **Direct Order Tracking**: Customers can check live delivery progress at any time without logging in by visiting `/track` with their invoice number (`#IND-2409`) or order ID.
+
+### Flow 1: Customer Doorstep Pickup Booking & Rate Card
+1. Open `/customer` and browse published rates via **View All Rates & Pricing** (direct route: `/customer/rates`).
+2. Click **Book Doorstep Pickup** (or navigate to `/customer/book`).
+3. Add garments to cart (e.g., 3x Shirts, 1x Silk Saree) and select service (Dry Cleaning, Premium Wash, Steam Press).
+4. Select pickup date and slot:
    - **Morning Window** (07:00 AM - 10:00 AM)
    - **Evening Window** (04:00 PM - 07:00 PM)
-4. Choose payment: **COD**, **UPI on Delivery**, or **Online Instant UPI QR**.
-5. Click **Place Doorstep Pickup Booking**.
-6. Note the **Invoice Number** (`#IND-2409`) and secret **4-Digit Delivery PIN**.
+5. Choose payment: **COD**, **UPI on Delivery**, or **Online Instant UPI QR**.
+6. Click **Place Doorstep Pickup Booking**.
+7. Note the **Invoice Number** (`#IND-2409`) and secret **4-Digit Delivery PIN**.
 
 ---
 
@@ -460,19 +468,33 @@ To configure 24/7 uptime monitoring at zero cost:
 
 ## 🧪 Automated Testing & Quality Assurance
 
-### Run Regression & Concurrency Test Suite
-A automated end-to-end regression script validates security, scale, backend APIs, and data privacy:
+### Run Complete Automated Test Suite (13 Tests)
+DhobiGhat includes 13 comprehensive unit, integration, and security tests built directly on the native Node.js test runner:
 
 ```bash
-node test-regression.mjs
+# Run all 13 tests across the automated test suite
+npm test
+
+# (Or run directly via Node.js native test runner)
+node --test tests/**/*.test.mjs
+```
+
+**Run individual test suites:**
+```bash
+node --test tests/security-fixes.test.mjs       # XSS, SQLi, JWT tampering & salted password hashing
+node --test tests/api-authorization.test.mjs    # RBAC guards, PIN redaction & upload size limits
+node --test tests/order-logistics.test.mjs      # 14-stage state machine & invoice sequence isolation
 ```
 
 **Verifications performed:**
-- **Route Guard Protection**: Verifies RBAC redirects for Admin and Store consoles.
-- **Scale Concurrency**: Simulates 60+ simultaneous orders with 0 ID or invoice collisions.
-- **Input Sanitization**: Tests XSS, script injection, and SQL injection payloads.
-- **Backend APIs**: Validates `/api/health` and `/api/orders` endpoints.
-- **Data Privacy Compliance**: Verifies zero customer PII written to client `localStorage`.
+- **Route Guard Protection & RBAC**: Verifies that unauthenticated or non-admin roles cannot delete orders or customers.
+- **Data Privacy & Handover PIN Redaction**: Verifies `deliveryPin` is strictly redacted for anonymous visitors and third parties.
+- **Delivery Verification Bypass Rules**: Ensures physical PIN is strictly required for unpaid/pending orders (even UPI QR).
+- **Upload Protection**: Enforces 5MB max payload and validates MIME types (`jpeg`, `png`, `webp`).
+- **Cryptographic Security**: Neutralizes XSS script tags, rejects SQL injection, validates JWT signatures, and verifies unique salted password hashes.
+- **State Machine Integrity**: Prohibits illegal stage jumps without management bypass.
+- **Order Channel Segregation**: Isolates online (`IND-` / `ord-onl-`) and walk-in (`WLK-` / `ord-wlk-`) sequences.
+- **Shift Reconciliation**: Accurately computes cash denominations, date-filtered system cash, and live drawer variance.
 
 ### Run Strict TypeScript Check
 ```bash

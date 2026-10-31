@@ -87,7 +87,7 @@ export const initialStaff: StoreStaff[] = [
     id: "staff-1",
     name: "Vikas Patil",
     phone: "9876543214",
-    pin: "9999",
+    passwordHash: "dh3_29ae994e_7bd12497",
     role: "store_manager",
     storeId: "branch-blr-1",
     storeName: "Bengaluru - Indiranagar Flagship",
@@ -99,7 +99,7 @@ export const initialStaff: StoreStaff[] = [
     id: "staff-2",
     name: "Ramesh Sharma",
     phone: "9876543210",
-    pin: "1234",
+    passwordHash: "dh3_561ef13a_460eb7e8",
     role: "store_operator",
     storeId: "branch-blr-1",
     storeName: "Bengaluru - Indiranagar Flagship",
@@ -111,7 +111,7 @@ export const initialStaff: StoreStaff[] = [
     id: "staff-3",
     name: "Sunil Gowda",
     phone: "9876543211",
-    pin: "2222",
+    passwordHash: "dh3_17d06546_872f9676",
     role: "worker",
     storeId: "branch-blr-1",
     storeName: "Bengaluru - Indiranagar Flagship",
@@ -123,7 +123,7 @@ export const initialStaff: StoreStaff[] = [
     id: "staff-4",
     name: "Mohammed Farooq",
     phone: "9876543212",
-    pin: "3333",
+    passwordHash: "dh3_17d06546_872f9676",
     role: "worker",
     storeId: "branch-blr-1",
     storeName: "Bengaluru - Indiranagar Flagship",
@@ -135,7 +135,7 @@ export const initialStaff: StoreStaff[] = [
     id: "staff-5",
     name: "Pooja Verma",
     phone: "9876543215",
-    pin: "5555",
+    passwordHash: "dh3_17d06546_872f9676",
     role: "worker",
     storeId: "branch-blr-1",
     storeName: "Bengaluru - Indiranagar Flagship",
@@ -147,7 +147,7 @@ export const initialStaff: StoreStaff[] = [
     id: "staff-6",
     name: "Mahesh Rider",
     phone: "9876543216",
-    pin: "6666",
+    passwordHash: "dh3_561b48c7_2225a251",
     role: "rider",
     storeId: "branch-blr-1",
     storeName: "Bengaluru - Indiranagar Flagship",
@@ -159,7 +159,7 @@ export const initialStaff: StoreStaff[] = [
     id: "staff-7",
     name: "Kiran Delivery",
     phone: "9123456780",
-    pin: "6667",
+    passwordHash: "dh3_561b48c7_2225a251",
     role: "rider",
     storeId: "branch-blr-1",
     storeName: "Bengaluru - Indiranagar Flagship",
@@ -171,7 +171,7 @@ export const initialStaff: StoreStaff[] = [
     id: "staff-8",
     name: "Anand Kumar",
     phone: "9845011223",
-    pin: "6668",
+    passwordHash: "dh3_561b48c7_2225a251",
     role: "rider",
     storeId: "branch-blr-1",
     storeName: "Bengaluru - Indiranagar Flagship",
@@ -181,6 +181,8 @@ export const initialStaff: StoreStaff[] = [
   },
 ];
 
+export const initialStaffList = initialStaff;
+
 export const initialAdminUsers: AdminUser[] = [
   {
     id: "admin-1",
@@ -188,6 +190,7 @@ export const initialAdminUsers: AdminUser[] = [
     email: "admin@dhobighat.in",
     name: "Vikram Singhania (Head of Operations)",
     role: "super_admin",
+    passwordHash: "dh3_2228831d_e7ab6ab8",
     permissions: ["all_access", "manage_pricing", "manage_stores", "manage_dlt", "view_reports", "refund_approval"],
   },
   {
@@ -196,6 +199,7 @@ export const initialAdminUsers: AdminUser[] = [
     email: "partner.blr@dhobighat.in",
     name: "Rajesh Hegde (Franchise Partner)",
     role: "franchise_owner",
+    passwordHash: "dh3_3fdbfea3_8103ec26",
     permissions: ["manage_stores", "view_reports", "manage_staff"],
   },
   {
@@ -204,6 +208,7 @@ export const initialAdminUsers: AdminUser[] = [
     email: "audit@dhobighat.in",
     name: "Sneha Kapadia (CA & Chief Auditor)",
     role: "finance_auditor",
+    passwordHash: "dh3_4e214c1b_0ca21607",
     permissions: ["view_reports", "refund_approval", "gst_filing"],
   },
 ];

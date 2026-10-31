@@ -65,7 +65,8 @@ interface CustomerAuthSession {
 interface StaffAuthSession {
   staff: StoreStaff | null;
   isCheckedIn: boolean;
-  loginWithPin: (phone: string, pin: string, storeId: string, shift: 'morning' | 'evening' | 'night') => boolean;
+  loginWithPassword: (roleOrPhone: StoreOperatorRole | string, password: string, branchId?: string, shift?: 'morning' | 'evening' | 'night') => boolean;
+  loginWithPin?: (phone: string, pin: string, storeId?: string, shift?: 'morning' | 'evening' | 'night') => boolean;
   logoutStaff: () => void;
   hasRole: (allowedRoles: (StoreOperatorRole | string)[]) => boolean;
 }
@@ -612,9 +613,14 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
   const staffSession: StaffAuthSession = {
     staff: currentStaffUser,
     isCheckedIn: !!currentStaffUser?.isCheckedIn,
-    loginWithPin: (phone, pin, storeId, shift) => {
-      const cleanPhone = phone.replace(/\D/g, '');
-      const matched = staffList.find((s) => s.phone.replace(/\D/g, '') === cleanPhone && s.pin === pin);
+    loginWithPassword: (roleOrPhone, password, storeId, shift) => {
+      if (!password) return false;
+      const cleanPhone = (roleOrPhone || '').replace(/\D/g, '');
+      const matched = staffList.find((s) => {
+        const matchesRole = s.role === roleOrPhone;
+        const matchesPhone = cleanPhone && s.phone.replace(/\D/g, '') === cleanPhone;
+        return (matchesRole || matchesPhone) && verifyPassword(password, s.passwordHash);
+      });
       if (matched) {
         const store = branches.find((b) => b.id === storeId);
         const updatedList = staffList.map((s) => ({
@@ -644,6 +650,9 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
         return true;
       }
       return false;
+    },
+    loginWithPin: (phone, pin, storeId, shift) => {
+      return staffSession.loginWithPassword(phone, pin, storeId, shift);
     },
     logoutStaff: () => {
       if (currentStaffUser) {
@@ -690,13 +699,10 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       const matched = adminUsers.find(
         (a) => a.username.toLowerCase() === cleanInput || a.email.toLowerCase() === cleanInput
       );
-      if (matched) {
+      if (matched && passwordOrPin) {
         const isMatch = matched.passwordHash
           ? verifyPassword(passwordOrPin, matched.passwordHash)
-          : (passwordOrPin === 'DhobiGhat@Admin2026!' ||
-             passwordOrPin === 'admin123' ||
-             passwordOrPin === '9999' ||
-             passwordOrPin === 'admin');
+          : false;
         if (isMatch) {
           setLoggedAdminId(matched.id);
           try {

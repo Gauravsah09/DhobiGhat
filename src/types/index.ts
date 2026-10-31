@@ -289,7 +289,7 @@ export interface StoreStaff {
   id: string;
   name: string;
   phone: string;
-  pin: string;           // 4-digit quick shift PIN
+  passwordHash: string;
   role: StoreOperatorRole | 'counter' | 'washer' | 'ironer' | 'qc' | 'dispatch' | 'manager';
   storeId: string;
   storeName: string;
@@ -298,6 +298,16 @@ export interface StoreStaff {
   avatar?: string;
   status?: 'active' | 'on_leave' | 'inactive';
 }
+
+export interface StaffSession {
+  staff: StoreStaff | null;
+  isCheckedIn: boolean;
+  loginWithPassword: (roleOrPhone: StoreOperatorRole | string, password: string, branchId?: string, shift?: 'morning' | 'evening' | 'night') => boolean;
+  loginWithPin?: (phone: string, pin: string, storeId: string, shift: 'morning' | 'evening' | 'night') => boolean;
+  logoutStaff: () => void;
+  hasRole: (allowedRoles: (StoreOperatorRole | string)[]) => boolean;
+}
+export type StaffAuthSession = StaffSession;
 
 export type AdminRole = 
   | 'super_admin' 

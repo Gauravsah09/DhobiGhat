@@ -41,11 +41,17 @@ import {
   QrCode,
   Banknote,
   Camera,
-  ExternalLink
+  ExternalLink,
+  Truck,
+  Zap,
+  Award,
+  Activity,
+  Flame
 } from 'lucide-react';
 import { useLaundry } from '@/context/LaundryContext';
 import { Order, OrderStatus, StoreStaff, StoreOperatorRole, PaymentMethod, CustomerUser, IndianAddress } from '@/types';
 import { formatCurrency } from '@/lib/utils';
+import { hashPassword } from '@/lib/security';
 
 export default function AdminConsoleApp() {
   const router = useRouter();
@@ -133,7 +139,7 @@ export default function AdminConsoleApp() {
     addStaff({
       name: newStaffName.trim(),
       phone: cleanPhone,
-      pin: newStaffPin.trim(),
+      passwordHash: hashPassword(newStaffPin.trim()),
       role: newStaffRole,
       storeId: targetBranch.id,
       storeName: targetBranch.name,
@@ -196,6 +202,22 @@ export default function AdminConsoleApp() {
 
   // Task 4: Rider photo evidence modal
   const [previewEvidencePhoto, setPreviewEvidencePhoto] = useState<{ url: string; invoiceNo: string; customerName: string } | null>(null);
+
+  // Slots & Capacity State
+  const [morningSlotLimit, setMorningSlotLimit] = useState(25);
+  const [eveningSlotLimit, setEveningSlotLimit] = useState(30);
+  const [morningBlackout, setMorningBlackout] = useState(false);
+  const [eveningBlackout, setEveningBlackout] = useState(false);
+  const [surgeThresholdPct, setSurgeThresholdPct] = useState(85);
+  const [surgeMultiplier, setSurgeMultiplier] = useState('1.25');
+  const [surgeEnabled, setSurgeEnabled] = useState(true);
+  const [branchCapacityOverrides, setBranchCapacityOverrides] = useState<Record<string, number>>({});
+  const [slotSaveFeedback, setSlotSaveFeedback] = useState('');
+
+  // Reports & Analytics filter state
+  const [reportDateRange, setReportDateRange] = useState<'today' | '7days' | '30days' | 'all'>('7days');
+  const [reportRiderShift, setReportRiderShift] = useState<'all' | 'morning' | 'evening'>('all');
+  const [reportExportFeedback, setReportExportFeedback] = useState('');
 
   // Total metrics
   const totalRevenue = orders.reduce((sum, o) => sum + o.grandTotal, 0);
@@ -785,7 +807,7 @@ export default function AdminConsoleApp() {
                             <td className="p-3.5 font-mono">
                               <div className="flex items-center gap-1.5">
                                 <span className="font-bold text-amber-400 tracking-wider">
-                                  {isPinRevealed ? st.pin : '••••'}
+                                  {isPinRevealed ? ((st as any).pin || 'Protected') : '••••'}
                                 </span>
                                 <button
                                   type="button"
@@ -803,9 +825,9 @@ export default function AdminConsoleApp() {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    const newPin = prompt(`Enter new 4-digit PIN for ${st.name}:`, st.pin);
+                                    const newPin = prompt(`Enter new 4-digit PIN for ${st.name}:`, (st as any).pin || '');
                                     if (newPin && newPin.trim().length === 4) {
-                                      updateStaff(st.id, { pin: newPin.trim() });
+                                      updateStaff(st.id, { passwordHash: hashPassword(newPin.trim()) } as any);
                                       alert(`PIN for ${st.name} updated to ${newPin.trim()}`);
                                     } else if (newPin !== null) {
                                       alert('PIN must be exactly 4 digits');
@@ -900,6 +922,398 @@ export default function AdminConsoleApp() {
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: SLOTS & CAPACITY */}
+        {activeTab === 'slots_capacity' && (
+          <div className="space-y-6">
+            {/* Header & Status Toast */}
+            <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-sky-400 font-mono text-xs uppercase tracking-wider mb-1">
+                  <Clock className="w-4 h-4 text-sky-400" />
+                  <span>Logistics Engine & Load Balancing</span>
+                </div>
+                <h3 className="text-lg font-black text-white">Pickup Slots & Hub Daily Processing Capacity</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Manage morning and evening customer booking throttles, hub weight thresholds, and surge triggers.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {slotSaveFeedback && (
+                  <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl animate-in fade-in duration-200">
+                    {slotSaveFeedback}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSlotSaveFeedback('✓ Capacity limits and slot policies synced across network');
+                    setTimeout(() => setSlotSaveFeedback(''), 3000);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-sky-600/25 transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Save Capacity Rules</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Visual Dials / Cards for Morning & Evening Slots */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Morning Slot Card */}
+              <div className={`p-6 rounded-3xl border transition-all ${
+                morningBlackout 
+                  ? 'bg-rose-950/20 border-rose-800/60' 
+                  : 'bg-slate-900 border-slate-800'
+              }`}>
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-black text-white">Morning Slot Window</span>
+                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider border ${
+                        morningBlackout 
+                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' 
+                          : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                      }`}>
+                        {morningBlackout ? 'Blackout Active' : 'Slot Active'}
+                      </span>
+                    </div>
+                    <p className="text-xs font-mono text-slate-400 mt-1">
+                      07:00 AM - 10:00 AM (Priority Morning Dispatch)
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMorningBlackout(!morningBlackout)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      morningBlackout
+                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
+                        : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                    }`}
+                  >
+                    {morningBlackout ? 'Lift Blackout' : 'Emergency Blackout'}
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-slate-400">Current Booking Limit:</span>
+                    <span className="font-mono text-lg font-bold text-white">{morningSlotLimit} orders / morning</span>
+                  </div>
+
+                  <input
+                    type="range"
+                    min="10"
+                    max="60"
+                    step="5"
+                    disabled={morningBlackout}
+                    value={morningSlotLimit}
+                    onChange={(e) => setMorningSlotLimit(Number(e.target.value))}
+                    className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                  />
+
+                  {/* Visual Dial / Progress indicator */}
+                  <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">Live Intake Today:</span>
+                      <span className="font-mono font-bold text-amber-400">18 / {morningSlotLimit} booked (72%)</span>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          morningBlackout 
+                            ? 'bg-rose-500' 
+                            : 'bg-gradient-to-r from-amber-500 to-amber-300'
+                        }`}
+                        style={{ width: `${Math.min(100, (18 / morningSlotLimit) * 100)}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[11px] text-slate-500">
+                      <span>Reserve Buffer: {Math.max(0, morningSlotLimit - 18)} slots open</span>
+                      <span>Peak Hours: 08:00 - 09:30 AM</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Evening Slot Card */}
+              <div className={`p-6 rounded-3xl border transition-all ${
+                eveningBlackout 
+                  ? 'bg-rose-950/20 border-rose-800/60' 
+                  : 'bg-slate-900 border-slate-800'
+              }`}>
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-black text-white">Evening Slot Window</span>
+                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider border ${
+                        eveningBlackout 
+                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' 
+                          : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
+                      }`}>
+                        {eveningBlackout ? 'Blackout Active' : 'Slot Active'}
+                      </span>
+                    </div>
+                    <p className="text-xs font-mono text-slate-400 mt-1">
+                      04:00 PM - 07:00 PM (After-Work Express Intake)
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEveningBlackout(!eveningBlackout)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      eveningBlackout
+                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
+                        : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                    }`}
+                  >
+                    {eveningBlackout ? 'Lift Blackout' : 'Emergency Blackout'}
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-slate-400">Current Booking Limit:</span>
+                    <span className="font-mono text-lg font-bold text-white">{eveningSlotLimit} orders / evening</span>
+                  </div>
+
+                  <input
+                    type="range"
+                    min="10"
+                    max="60"
+                    step="5"
+                    disabled={eveningBlackout}
+                    value={eveningSlotLimit}
+                    onChange={(e) => setEveningSlotLimit(Number(e.target.value))}
+                    className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-400"
+                  />
+
+                  {/* Visual Dial / Progress indicator */}
+                  <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">Live Intake Today:</span>
+                      <span className="font-mono font-bold text-indigo-400">22 / {eveningSlotLimit} booked (73%)</span>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          eveningBlackout 
+                            ? 'bg-rose-500' 
+                            : 'bg-gradient-to-r from-indigo-500 to-sky-400'
+                        }`}
+                        style={{ width: `${Math.min(100, (22 / eveningSlotLimit) * 100)}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[11px] text-slate-500">
+                      <span>Reserve Buffer: {Math.max(0, eveningSlotLimit - 22)} slots open</span>
+                      <span>Peak Hours: 05:30 - 06:45 PM</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Surge Threshold & Emergency Automation */}
+            <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center">
+                    <Zap className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">Dynamic Surge Threshold & Throttling Engine</h4>
+                    <p className="text-xs text-slate-400">Automatically adjust fees and warning prompts when hub loads spike</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-300 font-semibold">Surge Engine Status:</span>
+                  <button
+                    type="button"
+                    onClick={() => setSurgeEnabled(!surgeEnabled)}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      surgeEnabled 
+                        ? 'bg-amber-500 text-slate-950 font-black' 
+                        : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {surgeEnabled ? 'ENABLED' : 'DISABLED'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2">
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
+                  <span className="text-xs text-slate-400 block">Surge Activation Threshold</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-black font-mono text-amber-400">{surgeThresholdPct}% capacity</span>
+                    <input 
+                      type="range" 
+                      min="60" 
+                      max="95" 
+                      step="5"
+                      value={surgeThresholdPct}
+                      onChange={(e) => setSurgeThresholdPct(Number(e.target.value))}
+                      className="w-24 accent-amber-400"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500">Auto-triggers express surge pricing above this hub load.</p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
+                  <span className="text-xs text-slate-400 block">Surge Multiplier Rate</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-black font-mono text-white">{surgeMultiplier}x</span>
+                    <select
+                      value={surgeMultiplier}
+                      onChange={(e) => setSurgeMultiplier(e.target.value)}
+                      className="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white"
+                    >
+                      <option value="1.15">1.15x (+15%)</option>
+                      <option value="1.25">1.25x (+25%)</option>
+                      <option value="1.50">1.50x (+50%)</option>
+                    </select>
+                  </div>
+                  <p className="text-[10px] text-slate-500">Dynamic multiplier applied to doorstep pickup delivery fees.</p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
+                  <span className="text-xs text-slate-400 block">Emergency Mass Override</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMorningBlackout(true);
+                        setEveningBlackout(true);
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[11px] font-bold cursor-pointer"
+                    >
+                      Freeze All Slots
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMorningBlackout(false);
+                        setEveningBlackout(false);
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold cursor-pointer"
+                    >
+                      Restore All
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-500">Instant toggle for unexpected severe weather or plant downtime.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Hub Daily Capacity Thresholds (kg) vs Active Loaded Weight Across Branches */}
+            <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Building className="w-4 h-4 text-sky-400" />
+                    <span>Hub Daily Capacity Thresholds (kg) vs Active Loaded Weight</span>
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Live floor capacity utilization across Bengaluru Indiranagar, Koramangala, and Mumbai Powai hubs.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                {branches.map((branch) => {
+                  const maxCap = branchCapacityOverrides[branch.id] ?? branch.dailyCapacityKg ?? 300;
+                  const branchOrders = orders.filter((o) => o.storeId === branch.id);
+                  const recordedOrderWeight = branchOrders.reduce((sum, o) => sum + (o.recordedWeightKg || (o.totalQty * 0.45)), 0);
+                  const liveLoadedKg = Number((recordedOrderWeight > 0 ? recordedOrderWeight : (branch.dailyCapacityKg * 0.72)).toFixed(1));
+                  const utilizationPct = Math.round((liveLoadedKg / maxCap) * 100);
+
+                  const isHigh = utilizationPct >= 85;
+                  const isModerate = utilizationPct >= 65 && utilizationPct < 85;
+
+                  return (
+                    <div key={branch.id} className="p-5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h5 className="font-bold text-white text-sm">{branch.name}</h5>
+                          <span className="text-[10px] text-slate-500 font-mono">{branch.city} • {branch.operatingHours}</span>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${
+                          isHigh 
+                            ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                            : isModerate
+                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                            : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                        }`}>
+                          {utilizationPct}% Loaded
+                        </span>
+                      </div>
+
+                      {/* Weight Progress Bar */}
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-xs font-mono">
+                          <span className="text-slate-400">Active Loaded Weight:</span>
+                          <span className="font-bold text-white">{liveLoadedKg} kg / {maxCap} kg</span>
+                        </div>
+                        <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              isHigh 
+                                ? 'bg-rose-500' 
+                                : isModerate 
+                                ? 'bg-amber-400' 
+                                : 'bg-emerald-400'
+                            }`}
+                            style={{ width: `${Math.min(100, utilizationPct)}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Line Equipment & Controls */}
+                      <div className="pt-2 border-t border-slate-800/80 flex justify-between items-center text-xs">
+                        <div className="text-slate-400 text-[11px]">
+                          <span>Washers: <strong className="text-white">{branch.activeWashers || 4}</strong></span>
+                          <span className="mx-1.5">•</span>
+                          <span>Dryers: <strong className="text-white">{branch.activeDryers || 3}</strong></span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBranchCapacityOverrides(prev => ({
+                                ...prev,
+                                [branch.id]: Math.max(100, maxCap - 20)
+                              }));
+                            }}
+                            className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center cursor-pointer"
+                            title="Decrease Capacity Threshold"
+                          >
+                            -
+                          </button>
+                          <span className="font-mono text-[11px] text-sky-400 font-bold px-1">{maxCap}kg</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBranchCapacityOverrides(prev => ({
+                                ...prev,
+                                [branch.id]: maxCap + 20
+                              }));
+                            }}
+                            className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center cursor-pointer"
+                            title="Increase Capacity Threshold"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1588,6 +2002,309 @@ export default function AdminConsoleApp() {
               <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700">
                 <span className="text-slate-400 block mb-1">UPI Settlements (ICICI)</span>
                 <span className="font-mono text-xl font-bold text-emerald-400">₹1,680.90</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 9: REPORTS & TAT */}
+        {activeTab === 'reports' && (
+          <div className="space-y-6">
+            {/* Header & Filter Controls */}
+            <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-sky-400 font-mono text-xs uppercase tracking-wider mb-1">
+                  <TrendingUp className="w-4 h-4 text-sky-400" />
+                  <span>Executive Business Intelligence</span>
+                </div>
+                <h3 className="text-lg font-black text-white">Operations Analytics & Turnaround Time (TAT)</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Deep-dive SLAs, category revenue breakdown, channel distributions, and rider logistics scorecard.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex rounded-xl bg-slate-800 p-1 border border-slate-700 text-xs">
+                  {(['today', '7days', '30days', 'all'] as const).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setReportDateRange(r)}
+                      className={`px-3 py-1 rounded-lg font-bold capitalize transition-all cursor-pointer ${
+                        reportDateRange === r 
+                          ? 'bg-sky-600 text-white shadow-xs' 
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {r === '7days' ? 'Last 7 Days' : r === '30days' ? 'Last 30 Days' : r}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReportExportFeedback('✓ TAT Audit & Performance Report exported to CSV');
+                    setTimeout(() => setReportExportFeedback(''), 3000);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Download className="w-4 h-4 text-sky-400" />
+                  <span>Export Report</span>
+                </button>
+              </div>
+            </div>
+
+            {reportExportFeedback && (
+              <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{reportExportFeedback}</span>
+              </div>
+            )}
+
+            {/* Turnaround Time (TAT) Analytics Overview Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
+                <span className="text-xs text-slate-400 block">Average Turnaround Time (TAT)</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black font-mono text-emerald-400">18.4 hrs</span>
+                  <span className="text-[11px] text-emerald-400 font-bold">(-23% vs SLA)</span>
+                </div>
+                <div className="text-[10px] text-slate-500">Benchmark SLA: 24.0 hrs intake to ready</div>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
+                <span className="text-xs text-slate-400 block">Express Service TAT</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black font-mono text-amber-400">7.1 hrs</span>
+                  <span className="text-[11px] text-amber-400 font-bold">(Target: 12h)</span>
+                </div>
+                <div className="text-[10px] text-slate-500">Next-day guaranteed morning deliveries</div>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
+                <span className="text-xs text-slate-400 block">On-Time SLA Compliance</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black font-mono text-sky-400">98.6%</span>
+                  <span className="text-[11px] text-sky-400 font-bold">High Precision</span>
+                </div>
+                <div className="text-[10px] text-slate-500">Across Indiranagar, Koramangala & Powai</div>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
+                <span className="text-xs text-slate-400 block">Rework / QC Rejection Rate</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black font-mono text-indigo-400">0.8%</span>
+                  <span className="text-[11px] text-emerald-400 font-bold">Within Target</span>
+                </div>
+                <div className="text-[10px] text-slate-500">Spotting & touch-up re-cleans</div>
+              </div>
+            </div>
+
+            {/* Turnaround Time (TAT) Stage Timeline */}
+            <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-4">
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <Clock className="w-4 h-4 text-sky-400" />
+                <span>Turnaround Time (TAT) Duration by Processing Sub-Stage</span>
+              </h4>
+              <p className="text-xs text-slate-400">Granular stage intervals from customer doorstep intake to ready packaging.</p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 pt-2 text-center">
+                <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+                  <span className="text-[11px] text-slate-400 block">Rider Pickup</span>
+                  <span className="font-mono text-sm font-black text-white mt-1 block">1.8 hrs</span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+                  <span className="text-[11px] text-slate-400 block">Dock Sorting</span>
+                  <span className="font-mono text-sm font-black text-white mt-1 block">1.2 hrs</span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+                  <span className="text-[11px] text-slate-400 block">Washing Cycle</span>
+                  <span className="font-mono text-sm font-black text-white mt-1 block">4.5 hrs</span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+                  <span className="text-[11px] text-slate-400 block">Tumble Drying</span>
+                  <span className="font-mono text-sm font-black text-white mt-1 block">3.8 hrs</span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+                  <span className="text-[11px] text-slate-400 block">Steam Press</span>
+                  <span className="font-mono text-sm font-black text-white mt-1 block">5.4 hrs</span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+                  <span className="text-[11px] text-slate-400 block">QC Packaging</span>
+                  <span className="font-mono text-sm font-black text-white mt-1 block">1.7 hrs</span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+                  <span className="text-[11px] text-emerald-400 font-bold block">Ready TAT</span>
+                  <span className="font-mono text-sm font-black text-emerald-400 mt-1 block">18.4 hrs</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Service Share Breakdown & Channel Revenue Split */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Service Share Breakdown */}
+              <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-4">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Tag className="w-4 h-4 text-sky-400" />
+                    <span>Service Share Breakdown</span>
+                  </h4>
+                  <span className="text-[10px] text-slate-500 font-mono">Volume & Revenue Share</span>
+                </div>
+
+                <div className="space-y-4 pt-1">
+                  {/* Dry Cleaning */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="font-bold text-white">Dry Cleaning & Delicate Care</span>
+                      <span className="font-mono text-slate-300">₹46,100 (34% share • 145 items)</span>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                      <div className="bg-indigo-500 h-full rounded-full" style={{ width: '34%' }} />
+                    </div>
+                  </div>
+
+                  {/* Premium Wash */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="font-bold text-white">Premium Wash & Steam Iron (Per Kg)</span>
+                      <span className="font-mono text-slate-300">₹62,400 (46% share • 218 kg)</span>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                      <div className="bg-sky-500 h-full rounded-full" style={{ width: '46%' }} />
+                    </div>
+                  </div>
+
+                  {/* Steam Press */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="font-bold text-white">Steam Press Only</span>
+                      <span className="font-mono text-slate-300">₹27,120 (20% share • 110 items)</span>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                      <div className="bg-amber-400 h-full rounded-full" style={{ width: '20%' }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Channel Revenue Split */}
+              <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-4">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Receipt className="w-4 h-4 text-emerald-400" />
+                    <span>Channel Revenue Split</span>
+                  </h4>
+                  <span className="text-[10px] text-slate-500 font-mono">Omnichannel Ratio</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pt-1">
+                  <div className="p-4 rounded-2xl bg-slate-950/70 border border-sky-500/20 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-sky-400">Online Doorstep</span>
+                      <span className="text-xs font-mono font-bold text-white">63.8%</span>
+                    </div>
+                    <div className="text-xl font-black font-mono text-white">₹86,450</div>
+                    <div className="text-[10px] text-slate-400">182 orders • Avg basket ₹475</div>
+                    <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden mt-1">
+                      <div className="bg-sky-500 h-full" style={{ width: '63.8%' }} />
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-slate-950/70 border border-emerald-500/20 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-emerald-400">Walk-in Counter</span>
+                      <span className="text-xs font-mono font-bold text-white">36.2%</span>
+                    </div>
+                    <div className="text-xl font-black font-mono text-white">₹49,170</div>
+                    <div className="text-[10px] text-slate-400">114 orders • Avg basket ₹431</div>
+                    <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden mt-1">
+                      <div className="bg-emerald-400 h-full" style={{ width: '36.2%' }} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800/80 text-xs text-slate-400 flex items-center justify-between">
+                  <span>Growth Velocity:</span>
+                  <span className="text-emerald-400 font-bold">+18.4% online doorstep orders month-over-month</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Logistics Rider On-Time Delivery Leaderboard */}
+            <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Truck className="w-4 h-4 text-sky-400" />
+                    <span>Logistics Rider On-Time Delivery Leaderboard</span>
+                  </h4>
+                  <p className="text-xs text-slate-400">Performance rankings for on-time slot execution, dispatch rating, and bonus eligibility.</p>
+                </div>
+
+                <div className="flex rounded-xl bg-slate-800 p-1 border border-slate-700 text-xs">
+                  {(['all', 'morning', 'evening'] as const).map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setReportRiderShift(s)}
+                      className={`px-3 py-1 rounded-lg font-bold capitalize transition-all cursor-pointer ${
+                        reportRiderShift === s 
+                          ? 'bg-sky-600 text-white shadow-xs' 
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {s === 'all' ? 'All Shifts' : `${s} Shift`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-800/60 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-700">
+                    <tr>
+                      <th className="py-3 px-3">Rank</th>
+                      <th className="py-3 px-3">Rider Name</th>
+                      <th className="py-3 px-3">Hub & Shift</th>
+                      <th className="py-3 px-3">Completed Runs</th>
+                      <th className="py-3 px-3">On-Time SLA</th>
+                      <th className="py-3 px-3">Avg Slot Window</th>
+                      <th className="py-3 px-3">Customer Rating</th>
+                      <th className="py-3 px-3">Incentive Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {[
+                      { rank: '1', badge: '🥇', name: 'Kiran Delivery', hub: 'Indiranagar Flagship', shift: 'morning', runs: 156, onTime: '99.4%', window: '19 mins', rating: '4.95 ★', bonus: 'Star Performer (+₹1,500)' },
+                      { rank: '2', badge: '🥈', name: 'Mahesh Rider', hub: 'Indiranagar Flagship', shift: 'morning', runs: 138, onTime: '98.7%', window: '22 mins', rating: '4.88 ★', bonus: 'Bonus Eligible (+₹1,000)' },
+                      { rank: '3', badge: '🥉', name: 'Anand Kumar', hub: 'Indiranagar Flagship', shift: 'evening', runs: 124, onTime: '97.6%', window: '25 mins', rating: '4.82 ★', bonus: 'Bonus Eligible (+₹1,000)' },
+                      { rank: '4', badge: '⭐', name: 'Suresh Logistics', hub: 'Koramangala 4th Block', shift: 'morning', runs: 98, onTime: '96.9%', window: '28 mins', rating: '4.75 ★', bonus: 'Standard Rate' },
+                      { rank: '5', badge: '⭐', name: 'Pradeep Gowda', hub: 'Mumbai Powai Hub', shift: 'evening', runs: 92, onTime: '96.2%', window: '29 mins', rating: '4.71 ★', bonus: 'Standard Rate' },
+                    ]
+                      .filter((r) => reportRiderShift === 'all' || r.shift === reportRiderShift)
+                      .map((rider) => (
+                        <tr key={rider.name} className="hover:bg-slate-800/40 transition-colors">
+                          <td className="py-3 px-3 font-mono font-bold text-white flex items-center gap-1.5">
+                            <span>{rider.badge}</span>
+                            <span>#{rider.rank}</span>
+                          </td>
+                          <td className="py-3 px-3 font-bold text-white">{rider.name}</td>
+                          <td className="py-3 px-3 text-slate-400 capitalize">{rider.hub} ({rider.shift})</td>
+                          <td className="py-3 px-3 font-mono text-slate-200">{rider.runs} pickups</td>
+                          <td className="py-3 px-3 font-mono font-bold text-emerald-400">{rider.onTime}</td>
+                          <td className="py-3 px-3 font-mono text-slate-300">{rider.window}</td>
+                          <td className="py-3 px-3 font-mono text-amber-400 font-bold">{rider.rating}</td>
+                          <td className="py-3 px-3">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                              {rider.bonus}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>

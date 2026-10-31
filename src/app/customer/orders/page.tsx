@@ -37,6 +37,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { CustomerNavbar } from '@/components/customer/CustomerNavbar';
+import { GstInvoiceModal } from '@/components/customer/GstInvoiceModal';
 import { useLaundry } from '@/context/LaundryContext';
 import { Order, OrderStatus } from '@/types';
 import { formatCurrency, formatDateTime, formatTimeShort, generateUpiUri } from '@/lib/utils';
@@ -64,6 +65,9 @@ function CustomerOrdersContent() {
   const [filterInv, setFilterInv] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [accessDeniedMessage, setAccessDeniedMessage] = useState<string | null>(null);
+
+  // Indian GST Tax Invoice modal state
+  const [invoiceOrder, setInvoiceOrder] = useState<Order | null>(null);
 
   // Photo evidence preview modal state
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
@@ -547,7 +551,7 @@ function CustomerOrdersContent() {
                       <span>Dispute</span>
                     </button>
                     <button
-                      onClick={() => window.print()}
+                      onClick={() => setInvoiceOrder(selectedOrder)}
                       className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5"
                     >
                       <Printer className="w-3.5 h-3.5" />
@@ -1412,6 +1416,11 @@ function CustomerOrdersContent() {
             </div>
           </div>
         )}
+        {/* GST Tax Invoice Modal */}
+        <GstInvoiceModal
+          order={invoiceOrder}
+          onClose={() => setInvoiceOrder(null)}
+        />
       </main>
     </div>
   );

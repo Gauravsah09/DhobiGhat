@@ -126,8 +126,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (type === 'staff') {
-      if (!pin) {
-        return NextResponse.json({ success: false, message: '4-digit PIN is required' }, { status: 400 });
+      if (!password && !pin) {
+        return NextResponse.json({ success: false, message: 'Password is required' }, { status: 400 });
       }
 
       // Check against staff registry
@@ -137,10 +137,10 @@ export async function POST(req: NextRequest) {
       }
 
       // Compare PIN against staff member's registered credential only
-      const isPinValid = pin === staffMember.pin;
+      const isPinValid = verifyPassword(password || pin, staffMember.passwordHash);
 
       if (!isPinValid) {
-        return NextResponse.json({ success: false, message: 'Invalid 4-digit PIN' }, { status: 401 });
+        return NextResponse.json({ success: false, message: 'Invalid credentials' }, { status: 401 });
       }
 
       const sessionToken = await signSessionToken({

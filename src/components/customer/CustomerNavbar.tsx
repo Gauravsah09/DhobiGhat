@@ -39,11 +39,9 @@ export function CustomerNavbar() {
     : 0;
 
   const navLinks = [
-    { href: '/customer', label: 'Home' },
     { href: '/customer/book', label: 'Book Pickup', highlight: true },
-    { href: '/customer/rates', label: 'Rate Card (₹/kg & pcs)' },
-    { href: '/customer/orders', label: 'My Orders', badge: activeOrdersCount },
-    { href: '/customer/account', label: 'Account' },
+    { href: '/customer/orders', label: 'My Orders & Invoices', badge: activeOrdersCount },
+    { href: '/customer/rates', label: 'Rate Card' },
   ];
 
   return (
@@ -151,7 +149,7 @@ export function CustomerNavbar() {
               </div>
             ) : (
               <Link
-                href="/customer/auth"
+                href="/customer/login"
                 className="px-4 py-2 rounded-xl text-xs font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 transition-all flex items-center gap-1.5"
               >
                 <User className="w-3.5 h-3.5" />

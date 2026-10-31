@@ -77,7 +77,7 @@ export default function StoreFloorApp() {
     services, 
     priceMatrix, 
     updateOrderStatus, 
-    advanceOnlinePipeline,
+    advanceOnlinePipeline: rawAdvanceOnlinePipeline,
     assignPickupRider,
     assignDropRider,
     cancelOrder,
@@ -99,6 +99,20 @@ export default function StoreFloorApp() {
     queuedSyncEvents,
     isLoaded
   } = useLaundry();
+
+  // Order Transition Tracker: eliminates order movement flickering and layout thrashing
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+
+  const advanceOnlinePipeline = (orderId: string, nextStage: any, callback?: () => void) => {
+    setUpdatingOrderId(orderId);
+    setTimeout(() => {
+      rawAdvanceOnlinePipeline(orderId, nextStage);
+      if (callback) callback();
+      setTimeout(() => {
+        setUpdatingOrderId((curr) => (curr === orderId ? null : curr));
+      }, 120);
+    }, 250);
+  };
 
   const { staff, isCheckedIn, loginWithPin, logoutStaff, hasRole } = staffSession;
 
@@ -1101,13 +1115,17 @@ export default function StoreFloorApp() {
                   </p>
                 </div>
               ) : (
-                filteredOnlineOrders.map((ord) => {
+                filteredOnlineOrders.map((order) => {
+                  const ord = order;
+                  const isUpdating = updatingOrderId === order.id;
                   const normStatus = normalizeStatus(ord.status, ord.subStage);
                   const isAuth = isAuthorizedForStage(ord.status, ord.subStage);
                   return (
                     <div
-                      key={ord.id}
-                      className="rounded-3xl bg-slate-800/90 border border-slate-700/80 p-5 hover:border-slate-600 transition-all space-y-4"
+                      key={order.id}
+                      className={`rounded-3xl bg-slate-800/90 border border-slate-700/80 p-5 hover:border-slate-600 transition-all duration-300 ease-in-out space-y-4 ${
+                        isUpdating ? 'opacity-30 scale-[0.98] pointer-events-none' : 'opacity-100 scale-100'
+                      }`}
                     >
                       {/* Order Card Header */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-700/60 pb-3">
@@ -2092,8 +2110,15 @@ export default function StoreFloorApp() {
               )}
 
               <div className="space-y-3">
-                {walkinOrders.map((ord) => (
-                  <div key={ord.id} className="rounded-3xl bg-slate-800 border border-slate-700 p-5 space-y-3">
+                {walkinOrders.map((order) => {
+                  const ord = order;
+                  const isUpdating = updatingOrderId === order.id;
+                  return (
+                    <div
+                      key={order.id}
+                      className={`rounded-3xl bg-slate-800 border border-slate-700 p-5 space-y-3 transition-all duration-300 ease-in-out ${
+                        isUpdating ? 'opacity-30 scale-[0.98] pointer-events-none' : 'opacity-100 scale-100'
+                      }`}>
                     <div className="flex justify-between items-start">
                       <div>
                         <div className="flex items-center gap-2">
@@ -2205,7 +2230,7 @@ export default function StoreFloorApp() {
                     </div>
 
                   </div>
-                ))}
+                ); })}
               </div>
             </div>
 
@@ -2248,7 +2273,9 @@ export default function StoreFloorApp() {
                     </div>
 
                     <div className="space-y-2">
-                      {stageOrders.map((ord) => {
+                      {stageOrders.map((order) => {
+                        const ord = order;
+                        const isUpdating = updatingOrderId === order.id;
                         const nextStageMap: Record<string, OrderStatus> = {
                           received: 'sorting',
                           sorting: 'washing',
@@ -2260,7 +2287,11 @@ export default function StoreFloorApp() {
                         const nextStage = nextStageMap[col.stage];
 
                         return (
-                          <div key={ord.id} className="p-2.5 rounded-xl bg-slate-900 border border-slate-700/80 text-xs space-y-1.5">
+                          <div
+                            key={order.id}
+                            className={`p-2.5 rounded-xl bg-slate-900 border border-slate-700/80 text-xs space-y-1.5 transition-all duration-300 ease-in-out ${
+                              isUpdating ? 'opacity-30 scale-[0.97] pointer-events-none' : 'opacity-100 scale-100'
+                            }`}>
                             <div className="flex justify-between font-bold">
                               <span className="text-sky-400 font-mono">#{ord.invoiceNo}</span>
                               <span className="text-[10px] text-slate-400 capitalize">{ord.orderChannel || 'online'}</span>

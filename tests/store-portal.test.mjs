@@ -11,6 +11,8 @@ test('Store Login: Renders 4 prominent role tiles and password input', () => {
   assert.match(code, /type=["']password["']/, 'Must require password input');
   assert.doesNotMatch(code, /4-digit shift PIN/i, 'Must remove references to 4-digit PIN');
   assert.doesNotMatch(code, /4-digit PIN/i, 'Must remove references to 4-digit PIN');
+  assert.doesNotMatch(code, /Manager@2026!/i, 'Must not expose staff passwords on screen');
+  assert.doesNotMatch(code, /Default pwd/i, 'Must not display default passwords on screen');
 });
 
 test('Store Floor: Stable order keys and smooth transition tracker to eliminate flickering', () => {

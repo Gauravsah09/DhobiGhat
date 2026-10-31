@@ -179,96 +179,11 @@ export default function AdminLoginPage() {
               </button>
             </form>
 
-            {/* High Privilege Superadmin Quick Credentials Reference */}
-            <div className="pt-4 border-t border-slate-800 space-y-2.5">
-              <div className="text-center">
-                <span className="block text-[11px] font-bold text-amber-400 uppercase tracking-wider">
-                  Executive Security Directory (Quick Autofill)
-                </span>
-                <span className="text-[10px] text-slate-500">
-                  Select identity to test executive terminal access
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIdentifier('admin');
-                    setPassword('DhobiGhat@Admin2026!');
-                    setErrorMsg('');
-                  }}
-                  className="w-full p-2.5 rounded-xl bg-slate-950/70 hover:bg-slate-950 border border-amber-500/30 hover:border-amber-400 text-left flex items-center justify-between transition-all group cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-sm">
-                      👑
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-white group-hover:text-amber-300 transition-colors flex items-center gap-1.5">
-                        <span>Superadmin (Vikram Singhania)</span>
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-400/20 text-amber-300 font-mono">Master</span>
-                      </div>
-                      <div className="text-[10px] text-slate-400 font-mono">admin • Password: DhobiGhat@Admin2026!</div>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-400/20 group-hover:bg-amber-500 group-hover:text-slate-950 transition-colors">
-                    Autofill
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIdentifier('owner.blr');
-                    setPassword('Partner@2026!');
-                    setErrorMsg('');
-                  }}
-                  className="w-full p-2.5 rounded-xl bg-slate-950/70 hover:bg-slate-950 border border-slate-800 hover:border-slate-700 text-left flex items-center justify-between transition-all group cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm">
-                      🏢
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">
-                        Franchise Partner (Rajesh Hegde)
-                      </div>
-                      <div className="text-[10px] text-slate-400 font-mono">owner.blr • Password: Partner@2026!</div>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-400/20 group-hover:bg-emerald-500 group-hover:text-slate-950 transition-colors">
-                    Autofill
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIdentifier('finance');
-                    setPassword('Finance@2026!');
-                    setErrorMsg('');
-                  }}
-                  className="w-full p-2.5 rounded-xl bg-slate-950/70 hover:bg-slate-950 border border-slate-800 hover:border-slate-700 text-left flex items-center justify-between transition-all group cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-teal-500/20 text-teal-400 flex items-center justify-center font-bold text-sm">
-                      📊
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-white group-hover:text-teal-300 transition-colors">
-                        Finance Auditor (Sneha Kapadia)
-                      </div>
-                      <div className="text-[10px] text-slate-400 font-mono">finance • Password: Finance@2026!</div>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-teal-500/10 text-teal-400 border border-teal-400/20 group-hover:bg-teal-500 group-hover:text-slate-950 transition-colors">
-                    Autofill
-                  </span>
-                </button>
-              </div>
+            {/* Executive Security Notice */}
+            <div className="pt-4 border-t border-slate-800 flex items-center justify-center gap-2 text-xs text-slate-500">
+              <ShieldCheck className="w-4 h-4 text-emerald-500/70" />
+              <span>Authorized executive credentials required. All login sessions are audited.</span>
             </div>
-
           </div>
 
           {/* Quick links to Store and Customer */}

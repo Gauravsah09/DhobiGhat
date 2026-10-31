@@ -14,4 +14,6 @@ test('Admin Login: High-privilege Superadmin styling and password validation', (
   const code = fs.readFileSync('src/app/admin/login/page.tsx', 'utf8');
   assert.match(code, /Superadmin|Executive/i, 'Must convey superadmin authority');
   assert.match(code, /type=["']password["']/, 'Must require secure password');
+  assert.doesNotMatch(code, /DhobiGhat@Admin2026!/i, 'Must not expose admin master password on screen');
+  assert.doesNotMatch(code, /Autofill/i, 'Must not provide insecure credential autofill buttons');
 });

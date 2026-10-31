@@ -56,10 +56,7 @@ export async function POST(req: NextRequest) {
 
       const isPwdValid = matched.passwordHash
         ? verifyPassword(password, matched.passwordHash)
-        : (password === 'DhobiGhat@Admin2026!' ||
-           password === 'admin123' ||
-           password === '9999' ||
-           password === 'admin');
+        : false;
 
       if (!isPwdValid) {
         return NextResponse.json(

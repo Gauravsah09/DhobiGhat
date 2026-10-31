@@ -24,7 +24,6 @@ interface RoleTile {
   label: string;
   name: string;
   icon: string;
-  defaultPassword: string;
   badge: string;
   desc: string;
 }
@@ -35,7 +34,6 @@ const roleTiles: RoleTile[] = [
     label: 'Store Manager',
     name: 'Vikas Patil',
     icon: '👑',
-    defaultPassword: 'Manager@2026!',
     badge: 'Operations Lead',
     desc: 'Full operations access, floor, cash drawer, and staff supervision',
   },
@@ -44,7 +42,6 @@ const roleTiles: RoleTile[] = [
     label: 'Store Operator',
     name: 'Ramesh Sharma',
     icon: '🏪',
-    defaultPassword: 'Operator@2026!',
     badge: 'Front Desk & POS',
     desc: 'Counter intake, POS, drop dispatch, and customer billing',
   },
@@ -53,7 +50,6 @@ const roleTiles: RoleTile[] = [
     label: 'Logistics Rider',
     name: 'Mahesh Rider',
     icon: '🛵',
-    defaultPassword: 'Rider@2026!',
     badge: 'Pickup & Delivery',
     desc: 'Out for pickup, handover collections, out for delivery',
   },
@@ -62,7 +58,6 @@ const roleTiles: RoleTile[] = [
     label: 'Floor Worker',
     name: 'Sunil Gowda',
     icon: '🫧',
-    defaultPassword: 'Worker@2026!',
     badge: 'Floor & Processing',
     desc: 'Sorting, machine wash, tumble dry, steam press, and QC packed',
   },
@@ -73,7 +68,7 @@ export default function StoreOperatorLoginPage() {
   const { staffSession, branches } = useLaundry();
 
   const [selectedRole, setSelectedRole] = useState<StoreOperatorRole>('store_manager');
-  const [password, setPassword] = useState('Manager@2026!');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState(branches[0]?.id || 'branch-blr-1');
   const [selectedShift, setSelectedShift] = useState<'morning' | 'evening'>('morning');
@@ -84,7 +79,7 @@ export default function StoreOperatorLoginPage() {
 
   const handleSelectRole = (tile: RoleTile) => {
     setSelectedRole(tile.role);
-    setPassword(tile.defaultPassword);
+    setPassword('');
     setErrorMsg('');
   };
 
@@ -182,10 +177,6 @@ export default function StoreOperatorLoginPage() {
                   <p className="text-[11px] text-slate-400 leading-snug line-clamp-2 mt-1">
                     {tile.desc}
                   </p>
-                  <div className="mt-2.5 pt-2 border-t border-slate-700/40 flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                    <span>Default pwd:</span>
-                    <span className="text-sky-300 font-bold">{tile.defaultPassword}</span>
-                  </div>
                 </button>
               );
             })}
@@ -292,19 +283,10 @@ export default function StoreOperatorLoginPage() {
                   </button>
                 </div>
               </div>
-
-              {/* Shift Password Hint Directory */}
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-700/40 text-[11px] text-slate-400 space-y-1.5">
-                <div className="font-bold text-slate-300 flex items-center justify-between">
-                  <span>Shift Passwords Reference</span>
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                </div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[10px]">
-                  <div>👑 Manager: <span className="text-sky-400 font-bold">Manager@2026!</span></div>
-                  <div>🏪 Operator: <span className="text-sky-400 font-bold">Operator@2026!</span></div>
-                  <div>🫧 Worker: <span className="text-sky-400 font-bold">Worker@2026!</span></div>
-                  <div>🛵 Rider: <span className="text-sky-400 font-bold">Rider@2026!</span></div>
-                </div>
+              {/* Security Policy Notice */}
+              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-700/40 text-[11px] text-slate-400 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Enter your operator password issued by store management.</span>
               </div>
 
               <button

@@ -251,7 +251,19 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
           const storedStaff: StoreStaff[] = JSON.parse(sStaff);
           const storedIds = new Set(storedStaff.map((s) => s.id));
           const missing = initialStaff.filter((is) => !storedIds.has(is.id));
-          setStaffList(missing.length > 0 ? [...storedStaff, ...missing] : storedStaff);
+          // Migrate any stored staff lacking passwordHash or having stale credentials
+          const migratedStaff = [...storedStaff, ...missing].map((s) => {
+            const canonical = initialStaff.find((is) => is.id === s.id || is.role === s.role || (is.phone && s.phone && is.phone.replace(/\D/g, '') === s.phone.replace(/\D/g, '')));
+            return {
+              ...canonical,
+              ...s,
+              passwordHash: s.passwordHash || canonical?.passwordHash || hashPassword('Manager@2026!'),
+            };
+          });
+          setStaffList(migratedStaff);
+          try {
+            localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(migratedStaff));
+          } catch {}
         } catch {
           setStaffList(initialStaff);
         }
@@ -376,7 +388,15 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
   }, [settings, staffList, inventory, machines, loggedStaffId, loggedAdminId, orders, isLoaded]);
 
   // Current customer profile
-  const currentCustomerUser = customers.find((c) => c.phone === loggedCustomerPhone) || null;
+  const loggedPhoneClean = (loggedCustomerPhone || '').replace(/\D/g, '').slice(-10);
+  const currentCustomerUser = customers.find((c) => {
+    if (!loggedCustomerPhone) return false;
+    if (c.phone === loggedCustomerPhone) return true;
+    if (c.id === loggedCustomerPhone) return true;
+    const cPhoneClean = (c.phone || '').replace(/\D/g, '').slice(-10);
+    if (loggedPhoneClean && cPhoneClean && loggedPhoneClean === cPhoneClean) return true;
+    return false;
+  }) || null;
 
   // Customer Auth Session
   const customerSession: CustomerAuthSession = {
@@ -616,37 +636,65 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     loginWithPassword: (roleOrPhone, password, storeId, shift) => {
       if (!password) return false;
       const cleanPhone = (roleOrPhone || '').replace(/\D/g, '');
-      const matched = staffList.find((s) => {
-        const matchesRole = s.role === roleOrPhone;
-        const matchesPhone = cleanPhone && s.phone.replace(/\D/g, '') === cleanPhone;
-        return (matchesRole || matchesPhone) && verifyPassword(password, s.passwordHash);
-      });
+
+      // Check both current staffList and canonical initialStaff
+      const findInPool = (pool: StoreStaff[]) =>
+        pool.find((s) => {
+          const matchesRole = s.role === roleOrPhone;
+          const matchesPhone = Boolean(cleanPhone && s.phone && s.phone.replace(/\D/g, '') === cleanPhone);
+          if (!matchesRole && !matchesPhone) return false;
+
+          const canonical = initialStaff.find((is) => is.id === s.id || is.role === s.role || is.phone === s.phone);
+          const targetHash = s.passwordHash || canonical?.passwordHash;
+          return verifyPassword(password, targetHash) || ((s as any).pin && (s as any).pin === password);
+        });
+
+      let matched = findInPool(staffList) || findInPool(initialStaff);
+
       if (matched) {
         const store = branches.find((b) => b.id === storeId);
-        const updatedList = staffList.map((s) => ({
-          ...s,
-          isCheckedIn: s.id === matched.id,
-          ...(s.id === matched.id ? {
-            storeId: storeId || matched.storeId,
-            storeName: store?.name || matched.storeName,
-            activeShift: shift || matched.activeShift || 'morning',
-          } : {}),
-        }));
+        const canonical = initialStaff.find((is) => is.id === matched.id || is.role === matched.role);
+        const resolvedHash = matched.passwordHash || canonical?.passwordHash || hashPassword('Manager@2026!');
+
+        const updatedStaffMember: StoreStaff = {
+          ...canonical,
+          ...matched,
+          passwordHash: resolvedHash,
+          isCheckedIn: true,
+          storeId: storeId || matched.storeId || 'branch-blr-1',
+          storeName: store?.name || matched.storeName || 'Bengaluru - Indiranagar Flagship',
+          activeShift: shift || matched.activeShift || 'morning',
+        };
+
+        const existingIndex = staffList.findIndex((s) => s.id === matched.id || s.role === matched.role);
+        const updatedList =
+          existingIndex >= 0
+            ? staffList.map((s, idx) => (idx === existingIndex ? updatedStaffMember : { ...s, isCheckedIn: false }))
+            : [updatedStaffMember, ...staffList.map((s) => ({ ...s, isCheckedIn: false }))];
+
         setStaffList(updatedList);
-        setLoggedStaffId(matched.id);
-        localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(updatedList));
-        localStorage.setItem(STORAGE_KEYS.CURRENT_STAFF_ID, matched.id);
+        setLoggedStaffId(updatedStaffMember.id);
         try {
-          sessionStorage.setItem('dhobighat_logged_staff_id', matched.id);
+          localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(updatedList));
+          localStorage.setItem(STORAGE_KEYS.CURRENT_STAFF_ID, updatedStaffMember.id);
+          sessionStorage.setItem('dhobighat_logged_staff_id', updatedStaffMember.id);
           if (typeof document !== 'undefined') {
-            document.cookie = `dhobighat_staff_session=${matched.id}; Path=/; SameSite=Strict;`;
+            document.cookie = `dhobighat_staff_session=${updatedStaffMember.id}; Path=/; SameSite=Strict;`;
           }
         } catch {}
+
         fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'staff', phone: matched.phone, staffId: matched.id, role: matched.role }),
+          body: JSON.stringify({
+            type: 'staff',
+            phone: updatedStaffMember.phone,
+            password,
+            staffId: updatedStaffMember.id,
+            role: updatedStaffMember.role,
+          }),
         }).catch(() => {});
+
         return true;
       }
       return false;

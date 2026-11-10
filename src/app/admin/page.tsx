@@ -122,7 +122,7 @@ export default function AdminConsoleApp() {
   const [newStaffRole, setNewStaffRole] = useState<StoreOperatorRole>('store_operator');
   const [newStaffStoreId, setNewStaffStoreId] = useState(branches[0]?.id || 'branch-blr-1');
   const [newStaffShift, setNewStaffShift] = useState<'morning' | 'evening' | 'night'>('morning');
-  const [newStaffPin, setNewStaffPin] = useState('1234');
+  const [newStaffPin, setNewStaffPin] = useState('');
 
   const handleCreateStaff = (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,8 +150,8 @@ export default function AdminConsoleApp() {
     setShowAddStaffModal(false);
     setNewStaffName('');
     setNewStaffPhone('');
-    setNewStaffPin('1234');
-    alert(`User "${newStaffName.trim()}" created successfully with role ${newStaffRole.replace('_', ' ')}! Shift PIN: ${newStaffPin}`);
+    setNewStaffPin('');
+    alert(`Staff member "${newStaffName.trim()}" created successfully with role ${newStaffRole.replace('_', ' ')}.`);
   };
 
   // Order filters and settlement modal
@@ -2396,7 +2396,7 @@ export default function AdminConsoleApp() {
                       type="password"
                       maxLength={4}
                       required
-                      placeholder="1234"
+                      placeholder="Enter 4-digit PIN"
                       value={newStaffPin}
                       onChange={(e) => setNewStaffPin(e.target.value.replace(/\D/g, ''))}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-amber-400 font-mono font-bold tracking-widest text-center text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"

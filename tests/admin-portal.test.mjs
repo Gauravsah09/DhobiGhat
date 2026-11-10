@@ -16,4 +16,11 @@ test('Admin Login: High-privilege Superadmin styling and password validation', (
   assert.match(code, /type=["']password["']/, 'Must require secure password');
   assert.doesNotMatch(code, /DhobiGhat@Admin2026!/i, 'Must not expose admin master password on screen');
   assert.doesNotMatch(code, /Autofill/i, 'Must not provide insecure credential autofill buttons');
+  assert.doesNotMatch(code, /Demo Credentials/i, 'Must not show demo credentials table');
+});
+
+test('Admin Staff Management: Zero exposed default passwords or PIN leakage', () => {
+  const code = fs.readFileSync('src/app/admin/page.tsx', 'utf8');
+  assert.doesNotMatch(code, /useState\(['"]1234['"]\)/, 'Must not pre-fill staff PIN state with 1234');
+  assert.doesNotMatch(code, /alert\(.*Shift PIN:/, 'Must not echo created staff PIN in browser alert');
 });

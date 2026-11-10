@@ -335,11 +335,13 @@ function CustomerBookingContent() {
       ? delivDate.toISOString().split('T')[0]
       : new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0];
 
-    const userPhone10 = (user?.phone || '').replace(/\D/g, '').slice(-10);
-    const enteredPhone10 = custPhone.replace(/\D/g, '').slice(-10);
-    const finalPhone = enteredPhone10 || userPhone10 || custPhone;
-    const finalCustomerId = user?.id || (userPhone10 ? `cust-${userPhone10}` : (enteredPhone10 ? `guest-${enteredPhone10}` : `cust-${Date.now()}`));
-    const finalCustomerName = (custName || (user ? `${user.firstName} ${user.lastName}`.trim() : 'Valued Customer')).trim();
+    const effectiveUser = user || customerSession.user;
+    const userPhoneClean = (effectiveUser?.phone || '').replace(/\D/g, '');
+    const enteredPhoneClean = custPhone.replace(/\D/g, '');
+    const finalPhone = (effectiveUser?.phone || custPhone || '').trim();
+    const finalCustomerId = effectiveUser?.id || (userPhoneClean ? `cust-${userPhoneClean.slice(-10)}` : (enteredPhoneClean ? `cust-${enteredPhoneClean.slice(-10)}` : `cust-${Date.now()}`));
+    const finalCustomerName = (custName || (effectiveUser ? `${effectiveUser.firstName} ${effectiveUser.lastName}`.trim() : 'Valued Customer')).trim();
+    const finalCustomerEmail = effectiveUser?.email || undefined;
 
     const newOrder = createOrder({
       status: 'booked',
@@ -348,7 +350,7 @@ function CustomerBookingContent() {
       customerId: finalCustomerId,
       customerName: finalCustomerName,
       customerPhone: finalPhone,
-      customerEmail: user?.email,
+      customerEmail: finalCustomerEmail,
       pickupAddress: currentAddress,
       orderDate: new Date().toISOString().split('T')[0],
       pickupSlot: {
@@ -375,6 +377,15 @@ function CustomerBookingContent() {
       upiTransactionRef: paymentMethod === 'upi_qr' ? (upiRef || `UPI/${Date.now().toString().slice(-8)}/ICICI`) : undefined,
       remarks: `[Customer Online Booking] Pickup Slot: ${timeWindow}. Payment: ${(paymentMethod || 'cod').toUpperCase()}`,
     });
+
+    try {
+      sessionStorage.setItem('dhobighat_recent_booked_inv', newOrder.invoiceNo);
+      sessionStorage.setItem('dhobighat_recent_booked_id', newOrder.id);
+      sessionStorage.setItem('dhobighat_recent_booked_phone', newOrder.customerPhone || '');
+      if (effectiveUser?.id) {
+        sessionStorage.setItem('dhobighat_recent_booked_cust_id', effectiveUser.id);
+      }
+    } catch {}
 
     // Redirect to orders page with new invoice
     router.push(`/customer/orders?inv=${newOrder.invoiceNo}`);

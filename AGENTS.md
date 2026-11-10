@@ -10,3 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Git Workflow Rules
 - **CRITICAL / MANDATORY**: ALWAYS obtain explicit user permission before executing any `git push` command to `origin/main` or any remote branch. Never push changes automatically.
+
+## UI Security & Credential Rules
+- **ZERO CREDENTIAL LEAKAGE IN UI**: Never expose passwords, PINs, secret keys, default credential hints, or autofill buttons on any screen (Customer, Store, or Admin app). Real-world production enterprise standards must be strictly enforced: no "Use default (pwd)" buttons, no "Default pwd: ..." labels, and no credential cheat sheets on user interfaces.
+

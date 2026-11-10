@@ -97,22 +97,52 @@ function CustomerOrdersContent() {
   const [feedbackText, setFeedbackText] = useState('');
 
   // Filter orders strictly: only authenticated customer orders. Zero leaks for unauthenticated visitors!
-  const userPhone10 = (user?.phone || '').replace(/\D/g, '').slice(-10);
+  const userPhoneClean = (user?.phone || '').replace(/\D/g, '');
+  const userPhone10 = userPhoneClean.slice(-10);
+  const userEmail = (user?.email || '').trim().toLowerCase();
+  const userName = (user ? `${user.firstName} ${user.lastName || ''}`.trim().toLowerCase() : '');
+
+  // Session-placed orders in the current browser session
+  const recentBookedInv = typeof window !== 'undefined' ? sessionStorage.getItem('dhobighat_recent_booked_inv') : null;
+  const recentBookedId = typeof window !== 'undefined' ? sessionStorage.getItem('dhobighat_recent_booked_id') : null;
+  const recentBookedCustId = typeof window !== 'undefined' ? sessionStorage.getItem('dhobighat_recent_booked_cust_id') : null;
+
   const userOrders = (user && isLoggedIn)
     ? orders.filter((o) => {
         if (!o) return false;
-        // Direct ID match (supports user.id and phone-derived IDs)
-        if (o.customerId && (o.customerId === user.id || o.customerId === `cust-${userPhone10}` || o.customerId === `guest-${userPhone10}`)) {
+        // Direct ID match (supports user.id, phone-derived IDs, or session cust id)
+        if (o.customerId && (
+          o.customerId === user.id ||
+          (recentBookedCustId && o.customerId === recentBookedCustId) ||
+          (userPhone10 && o.customerId === `cust-${userPhone10}`) ||
+          (userPhone10 && o.customerId === `guest-${userPhone10}`)
+        )) {
           return true;
         }
-        // Normalized 10-digit phone match (covers +91, 0, or raw 10-digit variations)
-        const orderPhone10 = (o.customerPhone || '').replace(/\D/g, '').slice(-10);
-        if (userPhone10.length === 10 && userPhone10 === orderPhone10) {
+        // Normalized phone match (covers +91, 0, or raw 10-digit variations)
+        const orderPhoneClean = (o.customerPhone || '').replace(/\D/g, '');
+        const orderPhone10 = orderPhoneClean.slice(-10);
+        if (userPhone10 && orderPhone10 && userPhone10 === orderPhone10) {
+          return true;
+        }
+        if (userPhoneClean && orderPhoneClean && (userPhoneClean.endsWith(orderPhoneClean) || orderPhoneClean.endsWith(userPhoneClean))) {
           return true;
         }
         // Email match
-        if (user.email && o.customerEmail && user.email.toLowerCase() === o.customerEmail.toLowerCase()) {
+        if (userEmail && o.customerEmail && userEmail === o.customerEmail.trim().toLowerCase()) {
           return true;
+        }
+        // Session-placed order match
+        if (recentBookedInv && o.invoiceNo && o.invoiceNo.toUpperCase() === recentBookedInv.toUpperCase()) {
+          return true;
+        }
+        if (recentBookedId && o.id === recentBookedId) {
+          return true;
+        }
+        // Name match with order context
+        if (userName && o.customerName && o.customerName.toLowerCase().includes(user.firstName.toLowerCase())) {
+          if (o.customerEmail && userEmail && o.customerEmail.toLowerCase() === userEmail) return true;
+          if (orderPhoneClean && userPhoneClean && (userPhoneClean.slice(-6) === orderPhoneClean.slice(-6))) return true;
         }
         return false;
       })
@@ -175,20 +205,61 @@ function CustomerOrdersContent() {
         return;
       }
       const cleanInv = sanitizeInvoiceNo(rawHighlightInv);
-      const found = userOrders.find(
+
+      // 1. Check in userOrders
+      const foundInUserOrders = userOrders.find(
         (o) => (o.invoiceNo || '').toLowerCase() === cleanInv.toLowerCase()
       );
-      if (found) {
-        setSelectedOrderId(found.id);
+      if (foundInUserOrders) {
+        setSelectedOrderId(foundInUserOrders.id);
         setAccessDeniedMessage(null);
-      } else if (isLoaded) {
-        setAccessDeniedMessage(`Invoice #${cleanInv} was not found or is not associated with your account.`);
-        if (userOrders.length > 0 && !selectedOrderId) setSelectedOrderId(userOrders[0].id);
+        return;
+      }
+
+      // 2. Check if the order is present in the broader orders pool
+      const systemOrder = orders.find(
+        (o) => (o.invoiceNo || '').toLowerCase() === cleanInv.toLowerCase()
+      );
+
+      // Check if this system order was placed in this session or matches current user
+      const recentInv = typeof window !== 'undefined' ? sessionStorage.getItem('dhobighat_recent_booked_inv') : null;
+      const isSessionOrder = recentInv && recentInv.toUpperCase() === cleanInv.toUpperCase();
+      const phoneMatches = Boolean(
+        userPhoneClean &&
+        systemOrder?.customerPhone &&
+        (systemOrder.customerPhone.replace(/\D/g, '').endsWith(userPhone10) || userPhoneClean.endsWith(systemOrder.customerPhone.replace(/\D/g, '')))
+      );
+      const emailMatches = Boolean(
+        userEmail &&
+        systemOrder?.customerEmail &&
+        userEmail === systemOrder.customerEmail.trim().toLowerCase()
+      );
+      const idMatches = Boolean(
+        systemOrder?.customerId &&
+        (systemOrder.customerId === user.id || (recentBookedCustId && systemOrder.customerId === recentBookedCustId))
+      );
+
+      if (systemOrder && (isSessionOrder || phoneMatches || emailMatches || idMatches)) {
+        setSelectedOrderId(systemOrder.id);
+        setAccessDeniedMessage(null);
+        return;
+      }
+
+      // Only display access denied if data is loaded and the invoice definitely does not belong to this account
+      if (isLoaded && orders.length > 0) {
+        if (systemOrder) {
+          setAccessDeniedMessage(`Invoice #${cleanInv} is not associated with your account.`);
+        } else {
+          setAccessDeniedMessage(`Invoice #${cleanInv} was not found.`);
+        }
+        if (userOrders.length > 0 && !selectedOrderId) {
+          setSelectedOrderId(userOrders[0].id);
+        }
       }
     } else if (userOrders.length > 0 && !selectedOrderId) {
       setSelectedOrderId(userOrders[0].id);
     }
-  }, [rawHighlightInv, userOrders, user, isLoggedIn, isLoaded, selectedOrderId]);
+  }, [rawHighlightInv, userOrders, user, isLoggedIn, isLoaded, selectedOrderId, orders, userPhoneClean, userPhone10, userEmail, recentBookedCustId]);
 
   // Selected order MUST be an order belonging to the current user!
   const selectedOrder = (selectedOrderId ? userOrders.find((o) => o.id === selectedOrderId) : null) || userOrders[0] || null;

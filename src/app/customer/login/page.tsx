@@ -492,7 +492,7 @@ function CustomerLoginContent() {
             </div>
           )}
 
-          {/* Quick Demo Credentials Footer */}
+          {/* Store Portal Link Footer */}
           <div className="mt-6 text-center text-xs text-slate-400">
             <p>
               Looking for Store Operator access?{' '}

@@ -15,3 +15,13 @@ test('Customer Navigation: Navbar provides minimal essential links', () => {
   assert.match(content, /\/customer\/orders/, 'Must link to orders');
   assert.match(content, /\/customer\/rates/, 'Must link to rates');
 });
+
+test('Customer Orders: Resilient order matching and session-placed invoice ownership', () => {
+  const ordersCode = fs.readFileSync('src/app/customer/orders/page.tsx', 'utf8');
+  assert.match(ordersCode, /recentBookedInv/, 'Must check recentBookedInv from session');
+  assert.match(ordersCode, /userPhoneClean/, 'Must normalize phone numbers cleanly');
+  assert.match(ordersCode, /userEmail/, 'Must check email match');
+
+  const bookCode = fs.readFileSync('src/app/customer/book/page.tsx', 'utf8');
+  assert.match(bookCode, /sessionStorage\.setItem\(['"]dhobighat_recent_booked_inv['"]/, 'Must store recent booked invoice in session');
+});

@@ -13,6 +13,9 @@ test('Store Login: Renders 4 prominent role tiles and password input', () => {
   assert.doesNotMatch(code, /4-digit PIN/i, 'Must remove references to 4-digit PIN');
   assert.doesNotMatch(code, /Manager@2026!/i, 'Must not expose staff passwords on screen');
   assert.doesNotMatch(code, /Default pwd/i, 'Must not display default passwords on screen');
+  assert.doesNotMatch(code, /Use default/i, 'Must not offer "Use default" credential autofill buttons');
+  assert.doesNotMatch(code, /defaultPassword/i, 'Must not define or reference defaultPassword properties');
+  assert.doesNotMatch(code, /Shift Passwords Reference/i, 'Must not show shift passwords reference cheat sheet');
 });
 
 test('Store Floor: Stable order keys and smooth transition tracker to eliminate flickering', () => {

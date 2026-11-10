@@ -3,12 +3,12 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { 
-  Building2, 
-  KeyRound, 
-  ArrowRight, 
-  ShieldCheck, 
-  CheckCircle2, 
+import {
+  Building2,
+  KeyRound,
+  ArrowRight,
+  ShieldCheck,
+  CheckCircle2,
   AlertCircle,
   Sparkles,
   ArrowLeft,
@@ -118,7 +118,7 @@ export default function StoreOperatorLoginPage() {
       {/* Main Container */}
       <main className="flex-1 flex items-center justify-center p-4 sm:p-6 my-auto">
         <div className="max-w-2xl w-full space-y-6">
-          
+
           {/* Brand & Badge */}
           <div className="text-center space-y-2">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-sky-600 via-indigo-600 to-purple-600 flex items-center justify-center mx-auto text-white shadow-xl shadow-sky-500/20">
@@ -144,11 +144,10 @@ export default function StoreOperatorLoginPage() {
                   type="button"
                   id={`role-tile-${tile.role}`}
                   onClick={() => handleSelectRole(tile)}
-                  className={`text-left p-4 rounded-2xl border transition-all relative flex flex-col justify-between group cursor-pointer ${
-                    isSelected
+                  className={`text-left p-4 rounded-2xl border transition-all relative flex flex-col justify-between group cursor-pointer ${isSelected
                       ? 'bg-slate-800 border-sky-500 shadow-lg shadow-sky-500/20 ring-2 ring-sky-500/40'
                       : 'bg-slate-800/60 border-slate-700/80 hover:bg-slate-800 hover:border-slate-600'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2.5">
@@ -240,18 +239,9 @@ export default function StoreOperatorLoginPage() {
 
               {/* Password Input with Show/Hide Toggle */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                    Staff Shift Password
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setPassword(selectedPersona.defaultPassword)}
-                    className="text-[11px] text-sky-400 hover:text-sky-300 font-bold cursor-pointer"
-                  >
-                    Use default ({selectedPersona.defaultPassword})
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Staff Shift Password
+                </label>
                 <div className="relative">
                   <KeyRound className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   {showPassword ? (

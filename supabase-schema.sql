@@ -28,13 +28,13 @@ CREATE TABLE IF NOT EXISTS store_branches (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Store Staff & Operators (PIN Authentication)
+-- Store Staff & Operators (Password Authentication)
 CREATE TABLE IF NOT EXISTS store_staff (
     id VARCHAR(50) PRIMARY KEY,
     full_name VARCHAR(150) NOT NULL,
     phone VARCHAR(20) UNIQUE NOT NULL,
-    role VARCHAR(50) NOT NULL CHECK (role IN ('operator', 'manager', 'worker', 'rider', 'admin')),
-    pin_hash VARCHAR(255) NOT NULL, -- Stored as SHA256 or bcrypt hash
+    role VARCHAR(50) NOT NULL CHECK (role IN ('operator', 'manager', 'worker', 'rider', 'admin', 'store_manager', 'store_operator')),
+    password_hash VARCHAR(255) NOT NULL,
     branch_id VARCHAR(50) REFERENCES store_branches(id) DEFAULT 'branch-blr-indira',
     shift_preference VARCHAR(20) DEFAULT 'morning' CHECK (shift_preference IN ('morning', 'evening', 'night')),
     is_active BOOLEAN DEFAULT TRUE,
@@ -45,6 +45,21 @@ CREATE TABLE IF NOT EXISTS store_staff (
 );
 CREATE INDEX IF NOT EXISTS idx_staff_phone ON store_staff(phone);
 CREATE INDEX IF NOT EXISTS idx_staff_role ON store_staff(role);
+
+-- Admin Users (Super Admin, Franchise Owners, Finance Auditors)
+CREATE TABLE IF NOT EXISTS admin_users (
+    id VARCHAR(50) PRIMARY KEY,
+    username VARCHAR(100) UNIQUE NOT NULL,
+    email VARCHAR(150) UNIQUE NOT NULL,
+    full_name VARCHAR(150) NOT NULL,
+    role VARCHAR(50) NOT NULL CHECK (role IN ('super_admin', 'franchise_owner', 'finance_auditor')),
+    password_hash VARCHAR(255) NOT NULL,
+    permissions TEXT[] NOT NULL DEFAULT '{}',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_admin_users_username ON admin_users(username);
+CREATE INDEX IF NOT EXISTS idx_admin_users_email ON admin_users(email);
 
 -- Cloth Master Catalog
 CREATE TABLE IF NOT EXISTS cloth_types (
@@ -95,12 +110,14 @@ CREATE TABLE IF NOT EXISTS customers (
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100),
     email VARCHAR(150),
+    password_hash VARCHAR(255),
     is_verified BOOLEAN DEFAULT FALSE,
     wallet_balance NUMERIC(10, 2) DEFAULT 0.00,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
 
 CREATE TABLE IF NOT EXISTS customer_addresses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -289,6 +306,8 @@ ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_stage_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE store_shifts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE store_staff ENABLE ROW LEVEL SECURITY;
+ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
 
 -- Public read for catalog
 ALTER TABLE cloth_types ENABLE ROW LEVEL SECURITY;
@@ -334,6 +353,55 @@ CREATE POLICY "Service role full logs" ON order_stage_logs
     FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "Service role full shifts" ON store_shifts 
     FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "Service role full staff" ON store_staff 
+    FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "Service role full admin_users" ON admin_users 
+    FOR ALL USING (auth.role() = 'service_role');
+
+-- ====================================================================
+-- 8.1 SECURE PASSWORD VERIFICATION RPC (PGCRYPTO BLOWFISH)
+-- ====================================================================
+
+CREATE OR REPLACE FUNCTION verify_user_password(
+    account_type TEXT, 
+    identifier TEXT, 
+    candidate_password TEXT
+)
+RETURNS BOOLEAN AS $$
+DECLARE
+    found_hash TEXT;
+BEGIN
+    IF account_type = 'admin' THEN
+        SELECT password_hash INTO found_hash 
+        FROM admin_users 
+        WHERE (LOWER(username) = LOWER(identifier) OR LOWER(email) = LOWER(identifier))
+          AND is_active = TRUE
+        LIMIT 1;
+    ELSIF account_type = 'staff' THEN
+        SELECT password_hash INTO found_hash 
+        FROM store_staff 
+        WHERE phone = identifier
+          AND is_active = TRUE
+        LIMIT 1;
+    ELSIF account_type = 'customer' THEN
+        SELECT password_hash INTO found_hash 
+        FROM customers 
+        WHERE phone = identifier OR LOWER(email) = LOWER(identifier)
+        LIMIT 1;
+    END IF;
+
+    IF found_hash IS NULL THEN
+        RETURN FALSE;
+    END IF;
+
+    -- Verify via pgcrypto crypt if blowfish/bcrypt hash
+    IF found_hash LIKE '$2%' THEN
+        RETURN found_hash = crypt(candidate_password, found_hash);
+    END IF;
+
+    RETURN FALSE;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ====================================================================
 -- 9. FACTORY SEED DATA
@@ -344,15 +412,27 @@ INSERT INTO store_branches (id, name, code, address, city, phone, gstin)
 VALUES ('branch-blr-indira', 'DhobiGhat - Indiranagar Flagship', 'BLR-IND-01', '100ft Road, HAL 2nd Stage, Indiranagar', 'Bangalore', '+91 80 4123 4567', '29AABCU9603R1ZM')
 ON CONFLICT (id) DO NOTHING;
 
--- Staff Members (Pre-hashed PINs: 1234, 9999, 2222, 6666, 6667, 6668)
-INSERT INTO store_staff (id, full_name, phone, role, pin_hash, branch_id, shift_preference) VALUES
-('staff-2', 'Ramesh Sharma', '9876543210', 'operator', '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', 'branch-blr-indira', 'morning'),
-('staff-5', 'Vikas Patil', '9876543214', 'manager', '4f964082260ff280eecfa5c05c5be3b66432b4b4ebcc6c13745671d1e4431e67', 'branch-blr-indira', 'morning'),
-('staff-1', 'Sunil Gowda', '9876543211', 'worker', 'edee29f882543b956620b26d0ee0e7e950399b1c4222f5de05e06425b4c995e9', 'branch-blr-indira', 'morning'),
-('staff-4', 'Mahesh Rider', '9876543216', 'rider', 'f58c7e9095bb68c07e5d8ec0ef0ee2000f5be8e7bebe3253b708b58a18357a7b', 'branch-blr-indira', 'morning'),
-('staff-7', 'Kiran Delivery', '9123456780', 'rider', '34f0c4ee8fa45d064cfb8efae45e22ec6a53da2dfc3f0b2f5b4de3e73b22b6ec', 'branch-blr-indira', 'morning'),
-('staff-8', 'Anand Kumar', '9845011223', 'rider', 'db5f514b806d2d41b52f9547cbfe1b54a20b0b8c6e2e5ec46f88cb04a5bf14a2', 'branch-blr-indira', 'evening')
-ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name;
+-- Admin Users (pgcrypto blowfish hashed passwords)
+INSERT INTO admin_users (id, username, email, full_name, role, password_hash, permissions, is_active) VALUES
+('admin-1', 'admin', 'admin@dhobighat.in', 'Vikram Singhania (Head of Operations)', 'super_admin', crypt('DhobiGhat@Admin2026!', gen_salt('bf', 10)), ARRAY['all_access', 'manage_pricing', 'manage_stores', 'manage_dlt', 'view_reports', 'refund_approval'], TRUE),
+('admin-2', 'owner.blr', 'partner.blr@dhobighat.in', 'Rajesh Hegde (Franchise Partner)', 'franchise_owner', crypt('Partner@2026!', gen_salt('bf', 10)), ARRAY['manage_stores', 'view_reports', 'manage_staff'], TRUE),
+('admin-3', 'finance', 'audit@dhobighat.in', 'Sneha Kapadia (CA & Chief Auditor)', 'finance_auditor', crypt('Auditor@2026!', gen_salt('bf', 10)), ARRAY['view_reports', 'refund_approval', 'gst_filing'], TRUE)
+ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, permissions = EXCLUDED.permissions, password_hash = EXCLUDED.password_hash;
+
+-- Store Staff Members (pgcrypto blowfish hashed passwords)
+INSERT INTO store_staff (id, full_name, phone, role, password_hash, branch_id, shift_preference) VALUES
+('staff-1', 'Vikas Patil', '9876543214', 'store_manager', crypt('Manager@2026!', gen_salt('bf', 10)), 'branch-blr-indira', 'morning'),
+('staff-2', 'Ramesh Sharma', '9876543210', 'store_operator', crypt('Operator@2026!', gen_salt('bf', 10)), 'branch-blr-indira', 'morning'),
+('staff-3', 'Sunil Gowda', '9876543211', 'worker', crypt('Worker@2026!', gen_salt('bf', 10)), 'branch-blr-indira', 'morning'),
+('staff-4', 'Mahesh Rider', '9876543216', 'rider', crypt('Rider@2026!', gen_salt('bf', 10)), 'branch-blr-indira', 'morning'),
+('staff-7', 'Kiran Delivery', '9123456780', 'rider', crypt('Rider@2026!', gen_salt('bf', 10)), 'branch-blr-indira', 'morning'),
+('staff-8', 'Anand Kumar', '9845011223', 'rider', crypt('Rider@2026!', gen_salt('bf', 10)), 'branch-blr-indira', 'evening')
+ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, password_hash = EXCLUDED.password_hash;
+
+-- Customers Seed
+INSERT INTO customers (id, phone, first_name, last_name, email, password_hash, is_verified, wallet_balance) VALUES
+('a0000000-0000-0000-0000-000000000001', '9876543210', 'Priya', 'Sharma', 'priya.sharma@example.com', crypt('Customer@2026!', gen_salt('bf', 10)), TRUE, 500.00)
+ON CONFLICT (phone) DO UPDATE SET first_name = EXCLUDED.first_name, password_hash = EXCLUDED.password_hash;
 
 -- Cloth Types
 INSERT INTO cloth_types (id, name, code, category) VALUES

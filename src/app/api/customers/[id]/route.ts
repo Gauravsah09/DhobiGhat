@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSharedCustomers, setSharedCustomers } from '../route';
+import { getSharedCustomers, setSharedCustomers, mapDbCustomerToCustomer } from '../route';
 import { getRequestSession } from '@/lib/auth-server';
 import { sanitizeSqlInput, sanitizePhoneNumber } from '@/lib/security';
+import { isSupabaseConfigured, getSupabaseAdminClient } from '@/lib/supabase-server';
 
 export async function GET(
   req: NextRequest,
@@ -10,8 +11,34 @@ export async function GET(
   try {
     const { id } = await params;
     const session = await getRequestSession(req);
-    const customers = getSharedCustomers();
-    const customer = customers.find((c) => c.id === id || c.phone.replace(/\D/g, '').endsWith(id));
+
+    let customer: any = null;
+
+    if (isSupabaseConfigured) {
+      const supabase = getSupabaseAdminClient();
+      if (supabase) {
+        try {
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+          let query = supabase.from('customers').select('*');
+          if (isUuid) {
+            query = query.eq('id', id);
+          } else {
+            query = query.or(`id.eq.${id},phone.ilike.%${id}%`);
+          }
+          const { data, error } = await query.maybeSingle();
+          if (!error && data) {
+            customer = mapDbCustomerToCustomer(data);
+          }
+        } catch (err: any) {
+          console.warn('Supabase customer lookup exception:', err.message);
+        }
+      }
+    }
+
+    if (!customer) {
+      const customers = getSharedCustomers();
+      customer = customers.find((c) => c.id === id || c.phone.replace(/\D/g, '').endsWith(id));
+    }
 
     if (!customer) {
       return NextResponse.json({ success: false, message: 'Customer account not found' }, { status: 404 });
@@ -78,6 +105,25 @@ export async function PUT(
     if (safeUpdates.lastName) safeUpdates.lastName = sanitizeSqlInput(safeUpdates.lastName);
     if (safeUpdates.phone) safeUpdates.phone = sanitizePhoneNumber(safeUpdates.phone);
 
+    if (isSupabaseConfigured) {
+      const supabase = getSupabaseAdminClient();
+      if (supabase) {
+        try {
+          const updateData: Record<string, any> = {};
+          if (safeUpdates.firstName) updateData.first_name = safeUpdates.firstName;
+          if (safeUpdates.lastName) updateData.last_name = safeUpdates.lastName;
+          if (safeUpdates.phone) updateData.phone = safeUpdates.phone;
+          if (safeUpdates.email) updateData.email = safeUpdates.email;
+          if (safeUpdates.walletBalance !== undefined && isPrivileged) updateData.wallet_balance = safeUpdates.walletBalance;
+          if (Object.keys(updateData).length > 0) {
+            await supabase.from('customers').update(updateData).eq('id', targetCustomer.id);
+          }
+        } catch (dbErr: any) {
+          console.warn('Supabase customer update error:', dbErr.message);
+        }
+      }
+    }
+
     const updated = { ...targetCustomer, ...safeUpdates, id: targetCustomer.id };
     customers[index] = updated;
     setSharedCustomers(customers);
@@ -106,6 +152,17 @@ export async function DELETE(
         { success: false, message: 'Forbidden. Administrator authorization required to delete customer accounts.' },
         { status: 403 }
       );
+    }
+
+    if (isSupabaseConfigured) {
+      const supabase = getSupabaseAdminClient();
+      if (supabase) {
+        try {
+          await supabase.from('customers').delete().eq('id', id);
+        } catch (dbErr: any) {
+          console.warn('Supabase customer deletion error:', dbErr.message);
+        }
+      }
     }
 
     const customers = getSharedCustomers();

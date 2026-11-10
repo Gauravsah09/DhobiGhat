@@ -4,8 +4,9 @@ import { Order, OrderStatus, GarmentOrderItem } from '@/types';
 import { notifyNewOrderIncoming } from '@/lib/fcm';
 import { getRequestSession } from '@/lib/auth-server';
 import { hasSqlInjection, sanitizeSqlInput, sanitizePhoneNumber } from '@/lib/security';
+import { isSupabaseConfigured, getSupabaseAdminClient } from '@/lib/supabase-server';
 
-// Server-side in-memory active order ledger (shared across API routes during runtime)
+// Server-side in-memory active order ledger (shared across API routes during runtime / local tests)
 declare global {
   var __DHOBIGHAT_ORDERS__: Order[] | undefined;
   var __DHOBIGHAT_PIN_HASHES__: Record<string, string> | undefined;
@@ -44,6 +45,126 @@ export function setOrderPinHash(orderId: string, pin: string) {
   global.__DHOBIGHAT_PIN_HASHES__[orderId] = pin;
 }
 
+/**
+ * Maps database snake_case columns to the typed application Order model
+ */
+export function mapDbOrderToOrder(row: any): Order {
+  const isWalkin =
+    row.order_channel === 'walk_in' ||
+    row.channel === 'walkin_pos' ||
+    row.channel === 'walk_in' ||
+    (row.invoice_no && String(row.invoice_no).startsWith('WLK'));
+  const effectiveChannel = isWalkin ? 'walk_in' : 'online';
+
+  let items: GarmentOrderItem[] = [];
+  if (Array.isArray(row.order_items) && row.order_items.length > 0) {
+    items = row.order_items.map((it: any, idx: number) => ({
+      id: it.id || `item-${idx}`,
+      clothName: it.cloth_name || it.clothName || 'Item',
+      serviceName: it.service_name || it.serviceName || 'Wash',
+      unitPrice: Number(it.unit_price || it.unitPrice || 0),
+      quantity: Number(it.quantity || 1),
+      total: Number(it.subtotal || it.total || (Number(it.unit_price || 0) * Number(it.quantity || 1))),
+      qcPassed: it.qc_passed !== undefined ? it.qc_passed : (it.qcPassed !== undefined ? it.qcPassed : true),
+      stainNote: it.stain_notes || it.stainNote,
+    }));
+  } else if (Array.isArray(row.items) && row.items.length > 0) {
+    items = row.items;
+  }
+
+  let pickupAddress = row.pickup_address;
+  if (typeof pickupAddress === 'string') {
+    try {
+      pickupAddress = JSON.parse(pickupAddress);
+    } catch {}
+  }
+
+  let stageHistory = row.stage_history;
+  if (typeof stageHistory === 'string') {
+    try {
+      stageHistory = JSON.parse(stageHistory);
+    } catch {}
+  }
+
+  const pickupSlot = row.pickup_slot || (row.pickup_slot_date ? {
+    date: row.pickup_slot_date,
+    window: row.pickup_slot_window || 'Morning (07:00 AM - 10:00 AM)',
+  } : undefined);
+
+  const grandTotal = Number(row.grand_total) || 0;
+  const paidAmount = Number(row.paid_amount) || 0;
+  const balanceAmount = row.balance_amount !== undefined
+    ? Number(row.balance_amount)
+    : Math.max(0, grandTotal - paidAmount);
+
+  return {
+    id: row.id,
+    invoiceNo: row.invoice_no,
+    orderChannel: effectiveChannel,
+    customerId: row.customer_id || '',
+    customerName: row.customer_name || 'Customer',
+    customerPhone: row.customer_phone || '',
+    customerEmail: row.customer_email || undefined,
+    pickupAddress: isWalkin ? undefined : pickupAddress,
+    orderDate: row.order_date || (row.created_at ? new Date(row.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
+    deliveryDate: row.delivery_slot_date || row.delivery_date,
+    deliverySlotWindow: row.delivery_slot_window,
+    pickupSlot,
+    items,
+    totalQty: row.bag_piece_count || (items.length ? items.reduce((sum, it) => sum + it.quantity, 0) : Number(row.total_qty || 0)),
+    subtotal: Number(row.subtotal) || 0,
+    discountPct: Number(row.discount_pct) || 0,
+    discountAmount: Number(row.discount_amount) || 0,
+    deliveryFee: Number(row.delivery_fee) || 0,
+    gstRate: Number(row.gst_rate) || 18,
+    gstAmount: Number(row.gst_amount) || 0,
+    grandTotal,
+    paidAmount,
+    balanceAmount,
+    paymentMethod: row.payment_method || (isWalkin ? 'bycash' : 'cod'),
+    paymentStatus: row.payment_status || 'pending',
+    deliveryPin: row.delivery_pin || row.delivery_pin_hash,
+    status: row.status || (isWalkin ? 'received' : 'order_received'),
+    subStage: row.processing_sub_stage || row.sub_stage || (isWalkin ? 'received' : 'sorting'),
+    posDetails: row.pos_details,
+    upiTransactionRef: row.upi_transaction_ref || row.payment_ref,
+    stageHistory: Array.isArray(stageHistory) ? stageHistory : [],
+    remarks: row.remarks || row.notes,
+  };
+}
+
+function filterSharedOrders(
+  status: string | null | undefined,
+  channel: string | null | undefined,
+  customerPhone: string | null | undefined,
+  search: string | null | undefined
+): Order[] {
+  let list = [...getSharedOrders()];
+
+  if (status && status !== 'all') {
+    list = list.filter((o) => o.status === status);
+  }
+
+  if (channel && channel !== 'all') {
+    list = list.filter((o) => o.orderChannel === channel);
+  }
+
+  if (customerPhone) {
+    list = list.filter((o) => (o.customerPhone || '').replace(/\D/g, '').endsWith(customerPhone));
+  }
+
+  if (search) {
+    list = list.filter(
+      (o) =>
+        o.invoiceNo.toLowerCase().includes(search) ||
+        o.customerName.toLowerCase().includes(search) ||
+        (o.customerPhone || '').includes(search)
+    );
+  }
+
+  return list;
+}
+
 // GET: Fetch orders with query filtering and role-based PII privacy masking
 export async function GET(req: NextRequest) {
   try {
@@ -72,27 +193,49 @@ export async function GET(req: NextRequest) {
     const search = rawSearch ? sanitizeSqlInput(rawSearch).toLowerCase() : null;
     const customerPhone = rawCustomerPhone ? sanitizePhoneNumber(rawCustomerPhone) : null;
 
-    let orders = [...getSharedOrders()];
+    let orders: Order[] = [];
 
-    if (status && status !== 'all') {
-      orders = orders.filter((o) => o.status === status);
-    }
+    if (isSupabaseConfigured) {
+      const supabase = getSupabaseAdminClient();
+      if (supabase) {
+        try {
+          let query = supabase.from('orders').select('*').order('created_at', { ascending: false });
 
-    if (channel && channel !== 'all') {
-      orders = orders.filter((o) => o.orderChannel === channel);
-    }
+          if (status && status !== 'all') {
+            query = query.eq('status', status);
+          }
 
-    if (customerPhone) {
-      orders = orders.filter((o) => (o.customerPhone || '').replace(/\D/g, '').endsWith(customerPhone));
-    }
+          if (channel && channel !== 'all') {
+            const isWalkin = channel === 'walk_in' || channel === 'walkin_pos';
+            query = query.or(`order_channel.eq.${channel},channel.eq.${isWalkin ? 'walkin_pos' : 'online_pickup'}`);
+          }
 
-    if (search) {
-      orders = orders.filter(
-        (o) =>
-          o.invoiceNo.toLowerCase().includes(search) ||
-          o.customerName.toLowerCase().includes(search) ||
-          (o.customerPhone || '').includes(search)
-      );
+          if (customerPhone) {
+            query = query.ilike('customer_phone', `%${customerPhone}%`);
+          }
+
+          if (search) {
+            query = query.or(`invoice_no.ilike.%${search}%,customer_name.ilike.%${search}%,customer_phone.ilike.%${search}%`);
+          }
+
+          const { data, error } = await query;
+          if (!error && Array.isArray(data)) {
+            orders = data.map((row) => mapDbOrderToOrder(row));
+          } else {
+            if (error) {
+              console.warn('Supabase orders fetch error, falling back to shared memory:', error.message);
+            }
+            orders = filterSharedOrders(status, channel, customerPhone, search);
+          }
+        } catch (dbErr: any) {
+          console.warn('Supabase orders query exception:', dbErr.message);
+          orders = filterSharedOrders(status, channel, customerPhone, search);
+        }
+      } else {
+        orders = filterSharedOrders(status, channel, customerPhone, search);
+      }
+    } else {
+      orders = filterSharedOrders(status, channel, customerPhone, search);
     }
 
     // Role-based privacy masking: floor workers should NOT see raw customer phone numbers
@@ -223,7 +366,7 @@ export async function POST(req: NextRequest) {
       pickupAddress: isWalkin ? undefined : pickupAddress,
       orderDate: body.orderDate || nowIso.split('T')[0],
       deliveryDate: body.deliveryDate,
-      pickupSlot: body.pickupSlot,
+      pickupSlot: body.pickupSlot || (pickupSlotDate ? { date: pickupSlotDate, window: pickupSlotWindow } : undefined),
       items: validatedItems,
       totalQty,
       isPerKgOrder: body.isPerKgOrder !== undefined ? !!body.isPerKgOrder : undefined,
@@ -255,7 +398,119 @@ export async function POST(req: NextRequest) {
       remarks: body.remarks || notes,
     };
 
-    const filteredExisting = existingOrders.filter((o) => o.id !== newOrderId && o.invoiceNo !== nextInvoiceNo);
+    // 5. Persist to Supabase if configured
+    if (isSupabaseConfigured) {
+      const supabase = getSupabaseAdminClient();
+      if (supabase) {
+        try {
+          let customerUuid = null;
+          const cleanPhone = sanitizePhoneNumber(customerPhone);
+          const isCustUuid = body.customerId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.customerId);
+
+          if (isCustUuid) {
+            customerUuid = body.customerId;
+          } else if (cleanPhone) {
+            const { data: matchedCust } = await supabase
+              .from('customers')
+              .select('id')
+              .eq('phone', cleanPhone)
+              .maybeSingle();
+            if (matchedCust?.id) {
+              customerUuid = matchedCust.id;
+            }
+          }
+
+          const dbOrderPayload: Record<string, any> = {
+            invoice_no: nextInvoiceNo,
+            order_channel: effectiveChannel,
+            channel: effectiveChannel === 'walk_in' ? 'walkin_pos' : 'online_pickup',
+            customer_id: customerUuid,
+            customer_phone: customerPhone,
+            customer_name: customerName,
+            customer_email: body.customerEmail || null,
+            pickup_address: isWalkin ? null : (typeof pickupAddress === 'object' ? JSON.stringify(pickupAddress) : pickupAddress),
+            pickup_slot_date: newOrder.pickupSlot?.date || null,
+            pickup_slot_window: newOrder.pickupSlot?.window || null,
+            delivery_slot_date: newOrder.deliveryDate || null,
+            delivery_slot_window: newOrder.deliverySlotWindow || null,
+            grand_total: newOrder.grandTotal,
+            subtotal: newOrder.subtotal,
+            gst_rate: newOrder.gstRate,
+            gst_amount: newOrder.gstAmount,
+            discount_amount: newOrder.discountAmount,
+            paid_amount: newOrder.paidAmount,
+            balance_amount: newOrder.balanceAmount,
+            payment_method: newOrder.paymentMethod,
+            payment_status: newOrder.paymentStatus,
+            delivery_pin: rawDeliveryPin,
+            delivery_pin_hash: rawDeliveryPin,
+            status: effectiveStatus,
+            stage_history: newOrder.stageHistory,
+            remarks: newOrder.remarks || notes,
+            notes: newOrder.remarks || notes,
+            bag_piece_count: totalQty,
+          };
+
+          let { data: insertedOrder, error: orderInsertErr } = await supabase
+            .from('orders')
+            .insert(dbOrderPayload)
+            .select()
+            .single();
+
+          if (orderInsertErr) {
+            console.warn('Retrying Supabase order insert with standard schema columns:', orderInsertErr.message);
+            const fallbackPayload: Record<string, any> = {
+              invoice_no: nextInvoiceNo,
+              channel: effectiveChannel === 'walk_in' ? 'walkin_pos' : 'online_pickup',
+              customer_id: customerUuid || undefined,
+              status: effectiveStatus,
+              subtotal: newOrder.subtotal,
+              gst_rate: newOrder.gstRate,
+              gst_amount: newOrder.gstAmount,
+              discount_amount: newOrder.discountAmount,
+              grand_total: newOrder.grandTotal,
+              paid_amount: newOrder.paidAmount,
+              payment_status: newOrder.paymentStatus,
+              payment_method: newOrder.paymentMethod,
+              delivery_pin_hash: rawDeliveryPin,
+              notes: newOrder.remarks || notes,
+              bag_piece_count: totalQty,
+            };
+            const retryRes = await supabase.from('orders').insert(fallbackPayload).select().single();
+            if (!retryRes.error && retryRes.data) {
+              insertedOrder = retryRes.data;
+              orderInsertErr = null;
+            }
+          }
+
+          const activeOrderId = insertedOrder?.id || newOrderId;
+          newOrder.id = activeOrderId;
+
+          // Insert order items
+          if (validatedItems.length > 0) {
+            const dbItems = validatedItems.map((item) => ({
+              order_id: activeOrderId,
+              cloth_name: item.clothName,
+              service_name: item.serviceName,
+              unit_price: item.unitPrice,
+              quantity: item.quantity,
+              subtotal: item.total,
+              qc_passed: item.qcPassed ?? true,
+              stain_notes: item.stainNote || null,
+            }));
+
+            const { error: itemsErr } = await supabase.from('order_items').insert(dbItems);
+            if (itemsErr) {
+              console.warn('Failed to insert order_items into Supabase:', itemsErr.message);
+            }
+          }
+        } catch (supErr: any) {
+          console.warn('Supabase order creation exception:', supErr.message);
+        }
+      }
+    }
+
+    const filteredExisting = existingOrders.filter((o) => o.id !== newOrder.id && o.invoiceNo !== nextInvoiceNo);
     setSharedOrders([newOrder, ...filteredExisting]);
 
     // Send background FCM push alert
@@ -304,6 +559,21 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
+    if (isSupabaseConfigured) {
+      const supabase = getSupabaseAdminClient();
+      if (supabase) {
+        try {
+          if (orderId) {
+            await supabase.from('orders').delete().eq('id', orderId);
+          } else if (invoiceNo) {
+            await supabase.from('orders').delete().ilike('invoice_no', invoiceNo);
+          }
+        } catch (e: any) {
+          console.warn('Supabase order deletion error:', e.message);
+        }
+      }
+    }
+
     const currentOrders = getSharedOrders();
     const target = currentOrders.find(
       (o) => (orderId && o.id === orderId) || (invoiceNo && o.invoiceNo.toLowerCase() === invoiceNo.toLowerCase())
@@ -335,4 +605,3 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ success: false, message: err.message }, { status: 500 });
   }
 }
-

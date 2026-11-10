@@ -47,6 +47,7 @@ interface CustomerAuthSession {
   user: CustomerUser | null;
   isLoggedIn: boolean;
   loginWithPassword: (identifier: string, password: string) => { success: boolean; message?: string };
+  loginCustomer?: (identifier: string, password: string) => { success: boolean; message?: string };
   signupCustomer: (details: {
     firstName: string;
     lastName: string;
@@ -85,6 +86,7 @@ interface LaundryContextType {
   // Customer Auth
   customerSession: CustomerAuthSession;
   customers: CustomerUser[];
+  loginCustomer?: (identifier: string, password: string) => { success: boolean; message?: string };
   
   // Staff Auth & RBAC
   staffSession: StaffAuthSession;
@@ -208,66 +210,54 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
   // Hydrate non-sensitive preferences from LocalStorage & fetch live orders from Backend API
   useEffect(() => {
     try {
-      // PRIVACY AUDIT PURGE: Strictly eliminate any residual customer PII from browser disk
+      // PRIVACY AUDIT PURGE: Strictly eliminate any residual customer PII, staff, & order records from browser disk
       localStorage.removeItem('lms_ind_customers_v3');
+      localStorage.removeItem('lms_ind_orders_v7');
       localStorage.removeItem('lms_ind_orders_v6');
       localStorage.removeItem('lms_ind_orders_v5');
       localStorage.removeItem('lms_ind_auth_cust_phone_v3');
+      localStorage.removeItem('dhobighat_registered_customers_v1');
+      localStorage.removeItem(STORAGE_KEYS.ORDERS);
+      localStorage.removeItem(STORAGE_KEYS.STAFF);
 
-      // Hydrate dynamically registered customers (from signup) & initial accounts
-      const regCustomers = localStorage.getItem('dhobighat_registered_customers_v1');
-      if (regCustomers) {
-        try {
-          const parsed = JSON.parse(regCustomers);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const parsedIds = new Set(parsed.map((c: any) => c.id));
-            const missing = initialCustomers.filter((ic) => !parsedIds.has(ic.id));
-            setCustomers(missing.length > 0 ? [...parsed, ...missing] : parsed);
-          } else {
-            setCustomers(initialCustomers);
-          }
-        } catch {
-          setCustomers(initialCustomers);
-        }
-      } else {
-        setCustomers(initialCustomers);
-      }
+      // Customer and staff registries are managed in pure volatile RAM
+      setCustomers(initialCustomers);
+      setStaffList(initialStaff);
 
-      // Check active customer session from sessionStorage
+      // Hydrate active customer session from sessionStorage or session cookie
       const activeCust = sessionStorage.getItem('dhobighat_active_customer');
       if (activeCust) {
         try {
           const parsedCust = JSON.parse(activeCust);
           if (parsedCust?.phone) setLoggedCustomerPhone(parsedCust.phone);
         } catch {}
+      } else if (typeof document !== 'undefined') {
+        const match = document.cookie.match(/(?:^|;\s*)dhobighat_customer_session=([^;]+)/);
+        if (match && match[1]) {
+          setLoggedCustomerPhone(decodeURIComponent(match[1]));
+        }
+      }
+
+      // Hydrate active staff session from sessionStorage or session cookie
+      const activeStaffId = sessionStorage.getItem('dhobighat_logged_staff_id');
+      if (activeStaffId && activeStaffId !== 'none') {
+        setLoggedStaffId(activeStaffId);
+        setStaffList((prev) =>
+          prev.map((s) => (s.id === activeStaffId ? { ...s, isCheckedIn: true } : s))
+        );
+      } else if (typeof document !== 'undefined') {
+        const match = document.cookie.match(/(?:^|;\s*)dhobighat_staff_session=([^;]+)/);
+        if (match && match[1]) {
+          const staffId = decodeURIComponent(match[1]);
+          setLoggedStaffId(staffId);
+          setStaffList((prev) =>
+            prev.map((s) => (s.id === staffId ? { ...s, isCheckedIn: true } : s))
+          );
+        }
       }
 
       const sSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
       if (sSettings) setSettings(JSON.parse(sSettings));
-
-      const sStaff = localStorage.getItem(STORAGE_KEYS.STAFF);
-      if (sStaff) {
-        try {
-          const storedStaff: StoreStaff[] = JSON.parse(sStaff);
-          const storedIds = new Set(storedStaff.map((s) => s.id));
-          const missing = initialStaff.filter((is) => !storedIds.has(is.id));
-          // Migrate any stored staff lacking passwordHash or having stale credentials
-          const migratedStaff = [...storedStaff, ...missing].map((s) => {
-            const canonical = initialStaff.find((is) => is.id === s.id || is.role === s.role || (is.phone && s.phone && is.phone.replace(/\D/g, '') === s.phone.replace(/\D/g, '')));
-            return {
-              ...canonical,
-              ...s,
-              passwordHash: s.passwordHash || canonical?.passwordHash || hashPassword('Manager@2026!'),
-            };
-          });
-          setStaffList(migratedStaff);
-          try {
-            localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(migratedStaff));
-          } catch {}
-        } catch {
-          setStaffList(initialStaff);
-        }
-      }
 
       const sInventory = localStorage.getItem(STORAGE_KEYS.INVENTORY);
       if (sInventory) setInventory(JSON.parse(sInventory));
@@ -275,51 +265,34 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       const sMachines = localStorage.getItem(STORAGE_KEYS.MACHINES);
       if (sMachines) setMachines(JSON.parse(sMachines));
 
-      const sStaffId = localStorage.getItem(STORAGE_KEYS.CURRENT_STAFF_ID);
-      if (sStaffId === 'none' || !sStaffId) {
-        setLoggedStaffId(null);
-      } else {
-        setLoggedStaffId(sStaffId);
-      }
-
-      const sOrders = localStorage.getItem(STORAGE_KEYS.ORDERS);
-      if (sOrders) {
-        try {
-          const parsedOrders = JSON.parse(sOrders);
-          if (Array.isArray(parsedOrders) && parsedOrders.length > 0) {
-            setOrders(parsedOrders);
-          }
-        } catch {}
-      }
-
       const sAdminId = localStorage.getItem(STORAGE_KEYS.CURRENT_ADMIN_ID);
       if (sAdminId) setLoggedAdminId(sAdminId);
     } catch (e) {
       console.warn("Storage hydration error, continuing with seed", e);
     }
 
-    // Fetch live orders directly from Backend API (Server Valuation & Cloud DB)
+    // Hydrate live orders directly from Backend API (Server Valuation & Cloud DB)
+    // Keep seed data fallback in memory when /api/orders returns empty or when offline
     fetch('/api/orders')
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`Orders fetch returned ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
-        if (data.success && Array.isArray(data.orders)) {
+        if (data.success && Array.isArray(data.orders) && data.orders.length > 0) {
           setOrders((prev) => {
             const map = new Map<string, Order>();
             // Add server orders
             data.orders.forEach((o: Order) => {
               if (o && o.id) map.set(o.id, o);
             });
-            // Keep local orders that might not be on server yet
+            // Keep volatile RAM local orders that might not be on server yet
             prev.forEach((o: Order) => {
               if (o && o.id && !map.has(o.id)) {
                 map.set(o.id, o);
               }
             });
-            const merged = Array.from(map.values());
-            try {
-              localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(merged));
-            } catch {}
-            return merged;
+            return Array.from(map.values());
           });
         }
       })
@@ -363,15 +336,13 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Sync ONLY non-sensitive store settings back to LocalStorage (Never customers or orders)
+  // Sync ONLY non-sensitive store settings back to LocalStorage (Never customers, staff, or orders)
   useEffect(() => {
     if (!isLoaded) return;
     try {
       localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
-      localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(staffList));
       localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(inventory));
       localStorage.setItem(STORAGE_KEYS.MACHINES, JSON.stringify(machines));
-      if (loggedStaffId) localStorage.setItem(STORAGE_KEYS.CURRENT_STAFF_ID, loggedStaffId);
       if (loggedAdminId) localStorage.setItem(STORAGE_KEYS.CURRENT_ADMIN_ID, loggedAdminId);
 
       // Broadcast live sync to other open tabs via volatile memory channel
@@ -385,7 +356,7 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     } catch (e: any) {
       console.warn('Settings persistence failed:', e);
     }
-  }, [settings, staffList, inventory, machines, loggedStaffId, loggedAdminId, orders, isLoaded]);
+  }, [settings, inventory, machines, loggedAdminId, orders, isLoaded]);
 
   // Current customer profile
   const loggedPhoneClean = (loggedCustomerPhone || '').replace(/\D/g, '').slice(-10);
@@ -442,6 +413,10 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       }).catch(() => {});
 
       return { success: true, message: 'Signed in successfully!' };
+    },
+
+    loginCustomer: (identifier: string, password: string) => {
+      return customerSession.loginWithPassword(identifier, password);
     },
 
     signupCustomer: (details: {
@@ -512,9 +487,6 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
 
       const updatedCustomers = [newUser, ...customers];
       setCustomers(updatedCustomers);
-      try {
-        localStorage.setItem('dhobighat_registered_customers_v1', JSON.stringify(updatedCustomers));
-      } catch {}
 
       setLoggedCustomerPhone(newUser.phone);
       try {
@@ -551,8 +523,10 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       try {
         sessionStorage.clear();
         localStorage.removeItem('dhobighat_active_customer');
+        localStorage.removeItem('dhobighat_registered_customers_v1');
         localStorage.removeItem('lms_ind_auth_cust_phone_v3');
         localStorage.removeItem('lms_ind_customers_v3');
+        localStorage.removeItem('lms_ind_orders_v7');
         localStorage.removeItem('lms_ind_orders_v6');
         localStorage.removeItem('lms_ind_orders_v5');
 
@@ -585,9 +559,6 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
         c.id === currentCustomerUser.id ? { ...c, firstName, lastName, email } : c
       );
       setCustomers(updated);
-      try {
-        localStorage.setItem('dhobighat_registered_customers_v1', JSON.stringify(updated));
-      } catch {}
     },
 
     addAddress: (addressData) => {
@@ -608,9 +579,6 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
           return c;
         });
         setCustomers(updated);
-        try {
-          localStorage.setItem('dhobighat_registered_customers_v1', JSON.stringify(updated));
-        } catch {}
       }
       return newAddr;
     },
@@ -621,9 +589,6 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
         c.id === currentCustomerUser.id ? { ...c, defaultAddressId: addressId } : c
       );
       setCustomers(updated);
-      try {
-        localStorage.setItem('dhobighat_registered_customers_v1', JSON.stringify(updated));
-      } catch {}
     },
   };
 
@@ -675,8 +640,6 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
         setStaffList(updatedList);
         setLoggedStaffId(updatedStaffMember.id);
         try {
-          localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(updatedList));
-          localStorage.setItem(STORAGE_KEYS.CURRENT_STAFF_ID, updatedStaffMember.id);
           sessionStorage.setItem('dhobighat_logged_staff_id', updatedStaffMember.id);
           if (typeof document !== 'undefined') {
             document.cookie = `dhobighat_staff_session=${updatedStaffMember.id}; Path=/; SameSite=Strict;`;
@@ -706,17 +669,16 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       if (currentStaffUser) {
         const updatedList = staffList.map((s) => (s.id === currentStaffUser.id ? { ...s, isCheckedIn: false } : s));
         setStaffList(updatedList);
-        try {
-          localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(updatedList));
-        } catch {}
       }
       setLoggedStaffId(null);
       try {
-        localStorage.setItem(STORAGE_KEYS.CURRENT_STAFF_ID, 'none');
+        sessionStorage.removeItem('dhobighat_logged_staff_id');
         sessionStorage.clear();
+        localStorage.removeItem(STORAGE_KEYS.CURRENT_STAFF_ID);
         if (typeof document !== 'undefined') {
           document.cookie = '__Host-dhobighat_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0; Secure; SameSite=Strict;';
           document.cookie = 'dhobighat_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
+          document.cookie = 'dhobighat_staff_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
         }
         if (typeof window !== 'undefined' && 'caches' in window) {
           caches.keys().then((names) => {
@@ -944,9 +906,6 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       const filtered = prev.filter((o) => o.id !== newOrder.id && o.invoiceNo !== newOrder.invoiceNo);
       const updated = [newOrder, ...filtered];
       broadcastOrders(updated);
-      try {
-        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
-      } catch {}
       return updated;
     });
 
@@ -1002,9 +961,6 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
         return o;
       });
       broadcastOrders(updated);
-      try {
-        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
-      } catch {}
       fetch(`/api/orders/${orderId}/stage`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -1052,9 +1008,6 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
         return o;
       });
       broadcastOrders(updated);
-      try {
-        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
-      } catch {}
       // Notify backend state machine API
       fetch(`/api/orders/${orderId}/stage`, {
         method: 'PATCH',
@@ -1241,9 +1194,6 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
         return o;
       });
       broadcastOrders(updated);
-      try {
-        localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(updated));
-      } catch {}
       fetch(`/api/orders/${orderId}/stage`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -1262,8 +1212,8 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     const now = new Date().toISOString();
     const actor = getActorInfo();
     const label = getStageLabel(nextStage);
-    setOrders((prev) =>
-      prev.map((o) => {
+    setOrders((prev) => {
+      const updated = prev.map((o) => {
         if (o.id === orderId) {
           const newTimestamps = { ...(o.stageTimestamps || {}), [nextStage]: now };
           const newHistory: StageTimestampRecord[] = [
@@ -1279,7 +1229,7 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
           ];
           return {
             ...o,
-            status: 'processing',
+            status: 'processing' as OrderStatus,
             subStage: nextStage,
             lastStageUpdatedAt: now,
             stageTimestamps: newTimestamps,
@@ -1287,15 +1237,17 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
           };
         }
         return o;
-      })
-    );
+      });
+      broadcastOrders(updated);
+      return updated;
+    });
   };
 
   const reconcileRiderPickup = (orderId: string, details: Partial<RiderHandoverDetails>) => {
     const now = new Date().toISOString();
     const actor = getActorInfo();
-    setOrders((prev) =>
-      prev.map((o) => {
+    setOrders((prev) => {
+      const updated = prev.map((o) => {
         if (o.id === orderId) {
           const existing = o.riderHandover || {
             riderName: "Express Rider",
@@ -1317,7 +1269,7 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
           ];
           return {
             ...o,
-            status: 'received_at_store',
+            status: 'received_at_store' as OrderStatus,
             lastStageUpdatedAt: now,
             stageTimestamps: newTimestamps,
             stageHistory: newHistory,
@@ -1329,13 +1281,15 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
           };
         }
         return o;
-      })
-    );
+      });
+      broadcastOrders(updated);
+      return updated;
+    });
   };
 
   const qcCheckItem = (orderId: string, itemId: string, passed: boolean, reworkStage?: 'washing' | 'ironing') => {
-    setOrders((prev) =>
-      prev.map((o) => {
+    setOrders((prev) => {
+      const updated = prev.map((o) => {
         if (o.id === orderId) {
           const updatedItems = o.items.map((it) =>
             it.id === itemId ? { ...it, qcPassed: passed } : it
@@ -1347,8 +1301,10 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
           };
         }
         return o;
-      })
-    );
+      });
+      broadcastOrders(updated);
+      return updated;
+    });
   };
 
   const raiseDispute = (disputeData: Omit<DisputeRecord, 'id' | 'raisedAt' | 'status'>): DisputeRecord => {
@@ -1359,18 +1315,20 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       status: 'open',
     };
 
-    setOrders((prev) =>
-      prev.map((o) => {
+    setOrders((prev) => {
+      const updated = prev.map((o) => {
         if (o.id === disputeData.orderId) {
           return {
             ...o,
-            status: 'disputed',
+            status: 'disputed' as OrderStatus,
             dispute: newDispute,
           };
         }
         return o;
-      })
-    );
+      });
+      broadcastOrders(updated);
+      return updated;
+    });
 
     return newDispute;
   };
@@ -1382,8 +1340,8 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     notes: string,
     refundAmount: number = 0
   ) => {
-    setOrders((prev) =>
-      prev.map((o) => {
+    setOrders((prev) => {
+      const updated = prev.map((o) => {
         if (o.id === orderId && o.dispute && o.dispute.id === disputeId) {
           const updatedDispute: DisputeRecord = {
             ...o.dispute,
@@ -1393,20 +1351,22 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
           };
           return {
             ...o,
-            status: action === 'approved_refund' ? 'closed' : 'delivered',
+            status: (action === 'approved_refund' ? 'closed' : 'delivered') as OrderStatus,
             paymentStatus: action === 'approved_refund' ? 'refunded' : o.paymentStatus,
             dispute: updatedDispute,
           };
         }
         return o;
-      })
-    );
+      });
+      broadcastOrders(updated);
+      return updated;
+    });
   };
 
   const recordPayment = (orderId: string, status: 'paid' | 'failed', ref?: string) => {
     const now = new Date().toISOString();
-    setOrders((prev) =>
-      prev.map((o) => {
+    setOrders((prev) => {
+      const updated = prev.map((o) => {
         if (o.id === orderId) {
           // "UPI payment completion at Delivery time will close the order status to delivered."
           const isAtDelivery = o.status === 'out_for_delivery' || o.status === 'drop_assigned';
@@ -1435,8 +1395,10 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
           };
         }
         return o;
-      })
-    );
+      });
+      broadcastOrders(updated);
+      return updated;
+    });
   };
 
   const verifyAndCompleteDelivery = (
@@ -1790,12 +1752,14 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
   };
 
   const rateOrder = (orderId: string, rating: number, feedback?: string) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, rating, feedback, status: 'closed' } : o))
-    );
+    setOrders((prev) => {
+      const updated = prev.map((o) => (o.id === orderId ? { ...o, rating, feedback, status: 'closed' as OrderStatus } : o));
+      broadcastOrders(updated);
+      return updated;
+    });
   };
 
-  // Staff Management for Admin
+  // Staff Management for Admin (Managed in pure volatile RAM)
   const addStaff = (staffData: Omit<StoreStaff, 'id' | 'isCheckedIn'>): StoreStaff => {
     const newStaff: StoreStaff = {
       ...staffData,
@@ -1803,34 +1767,16 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       isCheckedIn: false,
       status: staffData.status || 'active',
     };
-    setStaffList((prev) => {
-      const updated = [...prev, newStaff];
-      try {
-        localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    setStaffList((prev) => [...prev, newStaff]);
     return newStaff;
   };
 
   const updateStaff = (id: string, staffData: Partial<StoreStaff>) => {
-    setStaffList((prev) => {
-      const updated = prev.map((s) => (s.id === id ? { ...s, ...staffData } : s));
-      try {
-        localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    setStaffList((prev) => prev.map((s) => (s.id === id ? { ...s, ...staffData } : s)));
   };
 
   const deleteStaff = (id: string) => {
-    setStaffList((prev) => {
-      const updated = prev.filter((s) => s.id !== id);
-      try {
-        localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
+    setStaffList((prev) => prev.filter((s) => s.id !== id));
   };
 
   // Machines & Inventory
@@ -1858,7 +1804,7 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     setSettings((prev) => ({ ...prev, ...newSettings }));
   };
 
-  // Customer Accounts Management (Admin CRM)
+  // Customer Accounts Management (Admin CRM - Managed in pure volatile RAM)
   const addCustomer = (cust: any) => {
     const cleanPhone = (cust.phone || '').replace(/\D/g, '');
     const defaultAddressId = `addr-${Date.now()}`;
@@ -1887,13 +1833,7 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       totalOrders: cust.totalOrders || 0,
     };
 
-    setCustomers((prev) => {
-      const updated = [newCust, ...prev];
-      try {
-        localStorage.setItem('dhobighat_registered_customers_v1', JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
+    setCustomers((prev) => [newCust, ...prev]);
 
     fetch('/api/customers', {
       method: 'POST',
@@ -1905,13 +1845,7 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateCustomer = (id: string, updates: any) => {
-    setCustomers((prev) => {
-      const updated = prev.map((c) => (c.id === id ? { ...c, ...updates } : c));
-      try {
-        localStorage.setItem('dhobighat_registered_customers_v1', JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
+    setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
 
     fetch('/api/customers', {
       method: 'PUT',
@@ -1924,9 +1858,6 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     setCustomers((prev) => {
       const target = prev.find((c) => c.id === id);
       const updated = prev.filter((c) => c.id !== id);
-      try {
-        localStorage.setItem('dhobighat_registered_customers_v1', JSON.stringify(updated));
-      } catch {}
 
       // If active session belongs to this deleted customer, log them out
       if (target && loggedCustomerPhone && target.phone.replace(/\D/g, '') === loggedCustomerPhone.replace(/\D/g, '')) {
@@ -1965,6 +1896,7 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
         updateSettings,
         customerSession,
         customers,
+        loginCustomer: (identifier: string, password: string) => customerSession.loginWithPassword(identifier, password),
         staffSession,
         staffList,
         branches,

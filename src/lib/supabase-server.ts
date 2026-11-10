@@ -1,19 +1,26 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey;
+export function checkIsSupabaseConfigured(): boolean {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  return Boolean(url && anonKey && !url.includes('your-project-id'));
+}
 
-export const isSupabaseConfigured = Boolean(
-  supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('your-project-id')
-);
+export const isSupabaseConfigured = checkIsSupabaseConfigured();
 
 /**
- * Returns a high-privilege server client for backend API routes (Order Valuation, PIN Hash Checks)
+ * Returns a high-privilege server client for backend API routes (Order Valuation, PIN/Password Checks)
+ * Authenticates using SUPABASE_SERVICE_ROLE_KEY (falling back to NEXT_PUBLIC_SUPABASE_ANON_KEY)
  */
 export function getSupabaseAdminClient(): SupabaseClient | null {
-  if (!isSupabaseConfigured) return null;
-  return createClient(supabaseUrl, supabaseServiceKey, {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || anonKey;
+
+  const isConfigured = Boolean(url && anonKey && !url.includes('your-project-id'));
+  if (!isConfigured) return null;
+
+  return createClient(url, serviceKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -21,3 +28,27 @@ export function getSupabaseAdminClient(): SupabaseClient | null {
   });
 }
 
+/**
+ * Returns a standard anon/user-scoped Supabase client for client/user operations
+ */
+export function getSupabaseClient(accessToken?: string): SupabaseClient | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+  const isConfigured = Boolean(url && anonKey && !url.includes('your-project-id'));
+  if (!isConfigured) return null;
+
+  return createClient(url, anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    global: accessToken
+      ? {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      : undefined,
+  });
+}

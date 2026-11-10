@@ -37,8 +37,9 @@ Whenever `npm run build` or a Docker image build is triggered:
 | [`tests/order-logistics.test.mjs`](file:///d:/Business/DhobiGhat/tests/order-logistics.test.mjs) | Online (`IND-`) vs Walk-in (`WLK-`) channel segregation, state machine transitions, shift closing. | 4 |
 | [`tests/supabase-schema-auth.test.mjs`](file:///d:/Business/DhobiGhat/tests/supabase-schema-auth.test.mjs) | PostgreSQL table parity, pgcrypto seeds, snake_case ↔ camelCase mapping, login API route. | 6 |
 | [`tests/health-watchdog.test.mjs`](file:///d:/Business/DhobiGhat/tests/health-watchdog.test.mjs) | `/api/health` watchdog implementation, database latency checks, degraded mode handling. | 2 |
+| [`tests/sentry-telemetry.test.mjs`](file:///d:/Business/DhobiGhat/tests/sentry-telemetry.test.mjs) | Client/Server/Edge configuration files, safe fallback on missing DSN, credential scrubbing, App Router instrumentation. | 3 |
 
-**Total Permanent Tests:** **34 Tests** (All passing, duration < 1.2s)
+**Total Permanent Tests:** **36 Tests** (All passing, duration < 2.5s)
 
 ---
 

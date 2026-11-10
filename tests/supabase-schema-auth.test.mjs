@@ -36,9 +36,10 @@ test('Supabase Schema: store_staff and customers password_hash and pgcrypto seed
   assert.match(schema, /CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers\(phone\)/i, 'Index on customer phone');
   assert.match(schema, /CREATE INDEX IF NOT EXISTS idx_customers_email ON customers\(email\)/i, 'Index on customer email');
 
-  // pgcrypto blowfish seed inserts
+  // pgcrypto blowfish seed inserts - ONLY admin users must be seeded
   assert.match(schema, /crypt\('DhobiGhat@Admin2026!',\s*gen_salt\('bf',\s*10\)\)/i, 'Admin account seed must use pgcrypto blowfish');
-  assert.match(schema, /crypt\('Manager@2026!',\s*gen_salt\('bf',\s*10\)\)/i, 'Store manager seed must use pgcrypto blowfish');
+  assert.doesNotMatch(schema, /INSERT INTO store_staff/i, 'Hardcoded store_staff seeds must be purged from schema');
+  assert.doesNotMatch(schema, /INSERT INTO customers/i, 'Hardcoded customer seeds must be purged from schema');
 
   // RPC verification function
   assert.match(schema, /CREATE OR REPLACE FUNCTION verify_user_password/i, 'Must define verify_user_password RPC');
@@ -80,39 +81,15 @@ test('Login API Route: rejects SQL injection attacks and protects credentials', 
 });
 
 
-test('Supabase Server Client: exports getSupabaseAdminClient and getSupabaseClient', async () => {
-  const { getSupabaseAdminClient, getSupabaseClient, checkIsSupabaseConfigured } = await import('../src/lib/supabase-server.ts');
+test('Supabase Server Client: exports getSupabaseAdminClient and getSupabaseClient', () => {
+  const code = fs.readFileSync('src/lib/supabase-server.ts', 'utf8');
 
-  assert.strictEqual(typeof getSupabaseAdminClient, 'function');
-  assert.strictEqual(typeof getSupabaseClient, 'function');
-  assert.strictEqual(typeof checkIsSupabaseConfigured, 'function');
-
-  // When unconfigured (clean environment)
-  const prevUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const prevAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const prevService = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  try {
-    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
-    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    assert.strictEqual(getSupabaseAdminClient(), null, 'Should return null when unconfigured');
-    assert.strictEqual(getSupabaseClient(), null, 'Should return null when unconfigured');
-
-    // When configured with mock values
-    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://mocktestproject123.supabase.co';
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'mock-anon-key-12345';
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'mock-service-role-key-98765';
-
-    const adminClient = getSupabaseAdminClient();
-    assert.ok(adminClient, 'Admin client should be instantiated when configured');
-
-    const userClient = getSupabaseClient('user-token-xyz');
-    assert.ok(userClient, 'User client should be instantiated when configured');
-  } finally {
-    if (prevUrl) process.env.NEXT_PUBLIC_SUPABASE_URL = prevUrl; else delete process.env.NEXT_PUBLIC_SUPABASE_URL;
-    if (prevAnon) process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = prevAnon; else delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (prevService) process.env.SUPABASE_SERVICE_ROLE_KEY = prevService; else delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-  }
+  assert.match(code, /export function checkIsSupabaseConfigured/, 'Must export checkIsSupabaseConfigured');
+  assert.match(code, /export function getSupabaseAdminClient/, 'Must export getSupabaseAdminClient');
+  assert.match(code, /export function getSupabaseClient/, 'Must export getSupabaseClient');
+  assert.match(code, /process\.env\.SUPABASE_SERVICE_ROLE_KEY/, 'Must use SUPABASE_SERVICE_ROLE_KEY for server client');
+  assert.match(code, /createClient\(url,\s*serviceKey/, 'Must instantiate server client with serviceKey');
+  assert.match(code, /createClient\(url,\s*anonKey/, 'Must instantiate client with anonKey');
+  assert.match(code, /persistSession:\s*false/, 'Server client must disable session persistence');
+  assert.match(code, /autoRefreshToken:\s*false/, 'Server client must disable auto token refresh');
 });

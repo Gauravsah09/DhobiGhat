@@ -25,7 +25,12 @@
 *.pem
 *.zip
 *.bundle
+# backup & local agent directories
 _backups/
+.superpowers/
+scratch/
+Supabase-dhoighat-db-backup*/
+*.sql.bak
 
 # debug
 npm-debug.log*

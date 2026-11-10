@@ -10,12 +10,12 @@ declare global {
 }
 
 if (!global.__DHOBIGHAT_CUSTOMERS__) {
-  global.__DHOBIGHAT_CUSTOMERS__ = [...initialCustomers];
+  global.__DHOBIGHAT_CUSTOMERS__ = [];
 }
 
 export function getSharedCustomers(): CustomerUser[] {
   if (!global.__DHOBIGHAT_CUSTOMERS__) {
-    global.__DHOBIGHAT_CUSTOMERS__ = [...initialCustomers];
+    global.__DHOBIGHAT_CUSTOMERS__ = [];
   }
   return global.__DHOBIGHAT_CUSTOMERS__;
 }

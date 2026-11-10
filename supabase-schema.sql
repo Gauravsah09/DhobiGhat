@@ -419,21 +419,6 @@ INSERT INTO admin_users (id, username, email, full_name, role, password_hash, pe
 ('admin-3', 'finance', 'audit@dhobighat.in', 'Sneha Kapadia (CA & Chief Auditor)', 'finance_auditor', crypt('Auditor@2026!', gen_salt('bf', 10)), ARRAY['view_reports', 'refund_approval', 'gst_filing'], TRUE)
 ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, permissions = EXCLUDED.permissions, password_hash = EXCLUDED.password_hash;
 
--- Store Staff Members (pgcrypto blowfish hashed passwords)
-INSERT INTO store_staff (id, full_name, phone, role, password_hash, branch_id, shift_preference) VALUES
-('staff-1', 'Vikas Patil', '9876543214', 'store_manager', crypt('Manager@2026!', gen_salt('bf', 10)), 'branch-blr-indira', 'morning'),
-('staff-2', 'Ramesh Sharma', '9876543210', 'store_operator', crypt('Operator@2026!', gen_salt('bf', 10)), 'branch-blr-indira', 'morning'),
-('staff-3', 'Sunil Gowda', '9876543211', 'worker', crypt('Worker@2026!', gen_salt('bf', 10)), 'branch-blr-indira', 'morning'),
-('staff-4', 'Mahesh Rider', '9876543216', 'rider', crypt('Rider@2026!', gen_salt('bf', 10)), 'branch-blr-indira', 'morning'),
-('staff-7', 'Kiran Delivery', '9123456780', 'rider', crypt('Rider@2026!', gen_salt('bf', 10)), 'branch-blr-indira', 'morning'),
-('staff-8', 'Anand Kumar', '9845011223', 'rider', crypt('Rider@2026!', gen_salt('bf', 10)), 'branch-blr-indira', 'evening')
-ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, password_hash = EXCLUDED.password_hash;
-
--- Customers Seed
-INSERT INTO customers (id, phone, first_name, last_name, email, password_hash, is_verified, wallet_balance) VALUES
-('a0000000-0000-0000-0000-000000000001', '9876543210', 'Priya', 'Sharma', 'priya.sharma@example.com', crypt('Customer@2026!', gen_salt('bf', 10)), TRUE, 500.00)
-ON CONFLICT (phone) DO UPDATE SET first_name = EXCLUDED.first_name, password_hash = EXCLUDED.password_hash;
-
 -- Cloth Types
 INSERT INTO cloth_types (id, name, code, category) VALUES
 (1, 'Shirt / T-Shirt', 'SHR', 'Men/Unisex'),

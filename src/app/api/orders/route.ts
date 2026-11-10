@@ -13,21 +13,16 @@ declare global {
 }
 
 if (!global.__DHOBIGHAT_ORDERS__) {
-  global.__DHOBIGHAT_ORDERS__ = [...initialOrders];
+  global.__DHOBIGHAT_ORDERS__ = [];
 }
 
 if (!global.__DHOBIGHAT_PIN_HASHES__) {
   global.__DHOBIGHAT_PIN_HASHES__ = {};
-  initialOrders.forEach((o) => {
-    if (global.__DHOBIGHAT_PIN_HASHES__) {
-      global.__DHOBIGHAT_PIN_HASHES__[o.id] = o.deliveryPin || '1234';
-    }
-  });
 }
 
 export function getSharedOrders(): Order[] {
   if (!global.__DHOBIGHAT_ORDERS__) {
-    global.__DHOBIGHAT_ORDERS__ = [...initialOrders];
+    global.__DHOBIGHAT_ORDERS__ = [];
   }
   return global.__DHOBIGHAT_ORDERS__;
 }

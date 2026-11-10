@@ -114,20 +114,23 @@ export default function AdminConsoleApp() {
   const [staffSearch, setStaffSearch] = useState('');
   const [staffRoleFilter, setStaffRoleFilter] = useState<string>('all');
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
-  const [revealedPins, setRevealedPins] = useState<Record<string, boolean>>({});
-
   // Add staff form inputs
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffPhone, setNewStaffPhone] = useState('');
   const [newStaffRole, setNewStaffRole] = useState<StoreOperatorRole>('store_operator');
   const [newStaffStoreId, setNewStaffStoreId] = useState(branches[0]?.id || 'branch-blr-1');
   const [newStaffShift, setNewStaffShift] = useState<'morning' | 'evening' | 'night'>('morning');
-  const [newStaffPin, setNewStaffPin] = useState('');
+  const [newStaffPassword, setNewStaffPassword] = useState('');
+  const [showNewStaffPassword, setShowNewStaffPassword] = useState(false);
 
   const handleCreateStaff = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStaffName.trim() || !newStaffPhone.trim() || !newStaffPin.trim()) {
+    if (!newStaffName.trim() || !newStaffPhone.trim() || !newStaffPassword.trim()) {
       alert('Please fill out all required fields.');
+      return;
+    }
+    if (newStaffPassword.trim().length < 6) {
+      alert('Staff password must be at least 6 characters long.');
       return;
     }
     const cleanPhone = newStaffPhone.replace(/\D/g, '');
@@ -139,18 +142,19 @@ export default function AdminConsoleApp() {
     addStaff({
       name: newStaffName.trim(),
       phone: cleanPhone,
-      passwordHash: hashPassword(newStaffPin.trim()),
+      passwordHash: hashPassword(newStaffPassword.trim()),
       role: newStaffRole,
       storeId: targetBranch.id,
       storeName: targetBranch.name,
       activeShift: newStaffShift,
       status: 'active',
-    });
+      password: newStaffPassword.trim(),
+    } as any);
 
     setShowAddStaffModal(false);
     setNewStaffName('');
     setNewStaffPhone('');
-    setNewStaffPin('');
+    setNewStaffPassword('');
     alert(`Staff member "${newStaffName.trim()}" created successfully with role ${newStaffRole.replace('_', ' ')}.`);
   };
 
@@ -594,7 +598,7 @@ export default function AdminConsoleApp() {
                         <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
                         <span>Store Manager</span>
                       </td>
-                      <td className="p-3.5 font-mono text-[11px] text-sky-400">Phone + 4-Digit PIN</td>
+                      <td className="p-3.5 font-mono text-[11px] text-sky-400">Phone + Shift Password</td>
                       <td className="p-3.5">
                         <span className="text-emerald-400 font-semibold">Full Pipeline Access:</span> All 14 Stages, Rider assignments, Drop scheduling, and order cancellations.
                       </td>
@@ -613,7 +617,7 @@ export default function AdminConsoleApp() {
                         <span className="w-2.5 h-2.5 rounded-full bg-sky-500" />
                         <span>Store Operator</span>
                       </td>
-                      <td className="p-3.5 font-mono text-[11px] text-sky-400">Phone + 4-Digit PIN</td>
+                      <td className="p-3.5 font-mono text-[11px] text-sky-400">Phone + Shift Password</td>
                       <td className="p-3.5">
                         <span className="text-sky-400 font-semibold">&quot;Order Receive Queue&quot;</span>, <span className="text-sky-400 font-semibold">&quot;Pickup assigned&quot;</span>, and <span className="text-sky-400 font-semibold">&quot;Drop Assigned&quot;</span> dispatch access, plus Cancel Order till pickup.
                       </td>
@@ -632,7 +636,7 @@ export default function AdminConsoleApp() {
                         <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
                         <span>Worker</span>
                       </td>
-                      <td className="p-3.5 font-mono text-[11px] text-sky-400">Phone + 4-Digit PIN</td>
+                      <td className="p-3.5 font-mono text-[11px] text-sky-400">Phone + Shift Password</td>
                       <td className="p-3.5">
                         <span className="text-amber-400 font-semibold">Internal Store Processing:</span> Received, Sorting, Washing, Drying, Ironing, and <span className="text-amber-400 font-semibold">&quot;QC Check & Packed Ready&quot;</span>.
                       </td>
@@ -651,7 +655,7 @@ export default function AdminConsoleApp() {
                         <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                         <span>Rider</span>
                       </td>
-                      <td className="p-3.5 font-mono text-[11px] text-sky-400">Phone + 4-Digit PIN</td>
+                      <td className="p-3.5 font-mono text-[11px] text-sky-400">Phone + Shift Password</td>
                       <td className="p-3.5">
                         <span className="text-emerald-400 font-semibold">Logistics Execution:</span> &quot;Out for Pickup&quot;, &quot;Order Picked-up&quot; (Scale Weigh-in & Evidence), &quot;Reached Store&quot;, &quot;Out For Delivery&quot;, and &quot;Delivered&quot; (Security PIN Verification).
                       </td>
@@ -725,7 +729,7 @@ export default function AdminConsoleApp() {
                       <th className="p-3.5">Store Hub</th>
                       <th className="p-3.5">Active Shift</th>
                       <th className="p-3.5">Mobile (+91)</th>
-                      <th className="p-3.5">4-Digit Shift PIN</th>
+                      <th className="p-3.5">Shift Password</th>
                       <th className="p-3.5">Status</th>
                       <th className="p-3.5 text-right">Actions</th>
                     </tr>
@@ -747,7 +751,6 @@ export default function AdminConsoleApp() {
                         return matchesSearch && matchesRole;
                       })
                       .map((st) => {
-                        const isPinRevealed = !!revealedPins[st.id];
                         const normRole = (st.role === 'manager' || st.role === 'store_manager') ? 'store_manager'
                           : (st.role === 'counter_operator' || st.role === 'counter' || st.role === 'store_operator') ? 'store_operator'
                           : (st.role === 'rider' || st.role === 'dispatch') ? 'rider'
@@ -803,38 +806,30 @@ export default function AdminConsoleApp() {
                               +91 {st.phone}
                             </td>
 
-                            {/* PIN with reveal toggle */}
+                            {/* Shift Password */}
                             <td className="p-3.5 font-mono">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-amber-400 tracking-wider">
-                                  {isPinRevealed ? ((st as any).pin || 'Protected') : '••••'}
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-400 tracking-widest text-xs">
+                                  ••••••••
                                 </span>
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    setRevealedPins((prev) => ({
-                                      ...prev,
-                                      [st.id]: !prev[st.id],
-                                    }))
-                                  }
-                                  className="text-slate-400 hover:text-white p-1"
-                                  title={isPinRevealed ? 'Hide PIN' : 'Reveal PIN'}
-                                >
-                                  {isPinRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                </button>
-                                <button
-                                  type="button"
                                   onClick={() => {
-                                    const newPin = prompt(`Enter new 4-digit PIN for ${st.name}:`, (st as any).pin || '');
-                                    if (newPin && newPin.trim().length === 4) {
-                                      updateStaff(st.id, { passwordHash: hashPassword(newPin.trim()) } as any);
-                                      alert(`PIN for ${st.name} updated to ${newPin.trim()}`);
-                                    } else if (newPin !== null) {
-                                      alert('PIN must be exactly 4 digits');
+                                    const newPassword = prompt(`Enter new shift password for ${st.name} (min 6 characters):`, '');
+                                    if (newPassword !== null) {
+                                      if (newPassword.trim().length >= 6) {
+                                        updateStaff(st.id, {
+                                          passwordHash: hashPassword(newPassword.trim()),
+                                          password: newPassword.trim(),
+                                        } as any);
+                                        alert(`Password for ${st.name} updated successfully.`);
+                                      } else {
+                                        alert('Password must be at least 6 characters long.');
+                                      }
                                     }
                                   }}
-                                  className="text-slate-500 hover:text-sky-400 p-1"
-                                  title="Change PIN"
+                                  className="text-slate-400 hover:text-sky-400 p-1 rounded hover:bg-slate-800 transition-colors"
+                                  title="Change Password"
                                 >
                                   <KeyRound className="w-3.5 h-3.5" />
                                 </button>
@@ -2391,16 +2386,27 @@ export default function AdminConsoleApp() {
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">4-Digit Shift Login PIN *</label>
-                    <input
-                      type="password"
-                      maxLength={4}
-                      required
-                      placeholder="Enter 4-digit PIN"
-                      value={newStaffPin}
-                      onChange={(e) => setNewStaffPin(e.target.value.replace(/\D/g, ''))}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-amber-400 font-mono font-bold tracking-widest text-center text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
+                    <label className="block text-slate-300 font-bold mb-1">Staff Shift Password *</label>
+                    <div className="relative">
+                      <input
+                        type={showNewStaffPassword ? 'text' : 'password'}
+                        required
+                        minLength={6}
+                        placeholder="Set secure password (min 6 chars)"
+                        value={newStaffPassword}
+                        onChange={(e) => setNewStaffPassword(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewStaffPassword(!showNewStaffPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                        title={showNewStaffPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showNewStaffPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">Minimum 6 characters. Used by operator to check in at store terminal.</p>
                   </div>
                 </div>
 

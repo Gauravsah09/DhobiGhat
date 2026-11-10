@@ -221,8 +221,22 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem(STORAGE_KEYS.STAFF);
 
       // Customer and staff registries are managed in pure volatile RAM
-      setCustomers(initialCustomers);
-      setStaffList(initialStaff);
+      setCustomers([]);
+      setStaffList([]);
+      setOrders([]);
+
+      // Fetch live store staff from server/database
+      fetch('/api/staff')
+        .then((res) => {
+          if (!res.ok) return null;
+          return res.json();
+        })
+        .then((data) => {
+          if (data?.success && Array.isArray(data.staff)) {
+            setStaffList(data.staff);
+          }
+        })
+        .catch(() => {});
 
       // Hydrate active customer session from sessionStorage or session cookie
       const activeCust = sessionStorage.getItem('dhobighat_active_customer');
@@ -272,32 +286,18 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Hydrate live orders directly from Backend API (Server Valuation & Cloud DB)
-    // Keep seed data fallback in memory when /api/orders returns empty or when offline
     fetch('/api/orders')
       .then((res) => {
         if (!res.ok) throw new Error(`Orders fetch returned ${res.status}`);
         return res.json();
       })
       .then((data) => {
-        if (data.success && Array.isArray(data.orders) && data.orders.length > 0) {
-          setOrders((prev) => {
-            const map = new Map<string, Order>();
-            // Add server orders
-            data.orders.forEach((o: Order) => {
-              if (o && o.id) map.set(o.id, o);
-            });
-            // Keep volatile RAM local orders that might not be on server yet
-            prev.forEach((o: Order) => {
-              if (o && o.id && !map.has(o.id)) {
-                map.set(o.id, o);
-              }
-            });
-            return Array.from(map.values());
-          });
+        if (data.success && Array.isArray(data.orders)) {
+          setOrders(data.orders);
         }
       })
       .catch((err) => {
-        console.warn('Backend API hydration fell back to in-memory seed:', err);
+        console.warn('Backend API hydration returned empty or failed:', err);
       })
       .finally(() => {
         setIsLoaded(true);
@@ -602,36 +602,25 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       if (!password) return false;
       const cleanPhone = (roleOrPhone || '').replace(/\D/g, '');
 
-      // Check both current staffList and canonical initialStaff
-      const findInPool = (pool: StoreStaff[]) =>
-        pool.find((s) => {
-          const matchesRole = s.role === roleOrPhone;
-          const matchesPhone = Boolean(cleanPhone && s.phone && s.phone.replace(/\D/g, '') === cleanPhone);
-          if (!matchesRole && !matchesPhone) return false;
-
-          const canonical = initialStaff.find((is) => is.id === s.id || is.role === s.role || is.phone === s.phone);
-          const targetHash = s.passwordHash || canonical?.passwordHash;
-          return verifyPassword(password, targetHash) || ((s as any).pin && (s as any).pin === password);
-        });
-
-      let matched = findInPool(staffList) || findInPool(initialStaff);
+      // Check registered staffList only
+      const matched = staffList.find((s) => {
+        const matchesRole = s.role === roleOrPhone;
+        const matchesPhone = Boolean(cleanPhone && s.phone && s.phone.replace(/\D/g, '') === cleanPhone);
+        if (!matchesRole && !matchesPhone) return false;
+        return verifyPassword(password, s.passwordHash);
+      });
 
       if (matched) {
         const store = branches.find((b) => b.id === storeId);
-        const canonical = initialStaff.find((is) => is.id === matched.id || is.role === matched.role);
-        const resolvedHash = matched.passwordHash || canonical?.passwordHash || hashPassword('Manager@2026!');
-
         const updatedStaffMember: StoreStaff = {
-          ...canonical,
           ...matched,
-          passwordHash: resolvedHash,
           isCheckedIn: true,
           storeId: storeId || matched.storeId || 'branch-blr-1',
           storeName: store?.name || matched.storeName || 'Bengaluru - Indiranagar Flagship',
           activeShift: shift || matched.activeShift || 'morning',
         };
 
-        const existingIndex = staffList.findIndex((s) => s.id === matched.id || s.role === matched.role);
+        const existingIndex = staffList.findIndex((s) => s.id === matched.id);
         const updatedList =
           existingIndex >= 0
             ? staffList.map((s, idx) => (idx === existingIndex ? updatedStaffMember : { ...s, isCheckedIn: false }))
@@ -1759,7 +1748,7 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  // Staff Management for Admin (Managed in pure volatile RAM)
+  // Staff Management for Admin (Persisted via /api/staff and synced in RAM)
   const addStaff = (staffData: Omit<StoreStaff, 'id' | 'isCheckedIn'>): StoreStaff => {
     const newStaff: StoreStaff = {
       ...staffData,
@@ -1767,16 +1756,36 @@ export function LaundryProvider({ children }: { children: React.ReactNode }) {
       isCheckedIn: false,
       status: staffData.status || 'active',
     };
-    setStaffList((prev) => [...prev, newStaff]);
+    setStaffList((prev) => [newStaff, ...prev.filter((s) => s.id !== newStaff.id && s.phone !== newStaff.phone)]);
+
+    fetch('/api/staff', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...newStaff,
+        password: (staffData as any).password,
+      }),
+    }).catch((err) => console.error('Staff creation API failed:', err));
+
     return newStaff;
   };
 
   const updateStaff = (id: string, staffData: Partial<StoreStaff>) => {
     setStaffList((prev) => prev.map((s) => (s.id === id ? { ...s, ...staffData } : s)));
+
+    fetch('/api/staff', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...staffData }),
+    }).catch((err) => console.error('Staff update API failed:', err));
   };
 
   const deleteStaff = (id: string) => {
     setStaffList((prev) => prev.filter((s) => s.id !== id));
+
+    fetch(`/api/staff?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }).catch((err) => console.error('Staff delete API failed:', err));
   };
 
   // Machines & Inventory

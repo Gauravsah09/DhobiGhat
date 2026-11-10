@@ -3,6 +3,7 @@ import { signSessionToken, SESSION_COOKIE_NAME } from '@/lib/auth-server';
 import { initialStaff, initialAdminUsers } from '@/lib/initial-data';
 import { hasSqlInjection, sanitizePhoneNumber, verifyPassword, hashPassword } from '@/lib/security';
 import { getSharedCustomers } from '@/app/api/customers/route';
+import { getSharedStaff } from '@/app/api/staff/route';
 import { getSupabaseAdminClient } from '@/lib/supabase-server';
 
 export async function POST(req: NextRequest) {
@@ -309,15 +310,16 @@ export async function POST(req: NextRequest) {
         return response;
       }
 
-      // Supabase not configured: Fallback to mock initialStaff for offline development & tests
-      const staffMember = initialStaff.find((s) => s.phone === phone);
+      // Supabase not configured: Fallback to shared in-memory staff registry
+      const staffPool = [...getSharedStaff(), ...initialStaff];
+      const staffMember = staffPool.find((s) => s.phone === cleanPhone || s.phone === phone);
       if (!staffMember) {
         return NextResponse.json({ success: false, message: 'Staff phone number not recognized' }, { status: 401 });
       }
 
-      const isPinValid = verifyPassword(candidatePassword, staffMember.passwordHash);
+      const isPasswordValid = verifyPassword(candidatePassword, staffMember.passwordHash);
 
-      if (!isPinValid) {
+      if (!isPasswordValid) {
         return NextResponse.json({ success: false, message: 'Invalid credentials' }, { status: 401 });
       }
 

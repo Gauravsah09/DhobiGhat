@@ -7,7 +7,6 @@
 [![Cloudflare R2](https://img.shields.io/badge/Cloudflare_R2-Zero_Egress-orange?style=flat&logo=cloudflare)](https://developers.cloudflare.com/r2/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL_16-3ECF8E?style=flat&logo=supabase)](https://supabase.com/)
 [![Firebase Cloud Messaging](https://img.shields.io/badge/FCM-Web_Push-FFCA28?style=flat&logo=firebase)](https://firebase.google.com/)
-[![Sentry](https://img.shields.io/badge/Sentry-Monitoring-362D59?style=flat&logo=sentry)](https://sentry.io/)
 [![Docker](https://img.shields.io/badge/Docker-Alpine_Standalone-2496ED?style=flat&logo=docker)](https://www.docker.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
@@ -97,7 +96,6 @@ DhobiGhat moves 100% of critical business calculations, stage transitions, and p
 | **Database** | **Supabase** | 500 MB PostgreSQL 16, 50,000 MAU, Supavisor Pooler | Relational orders & audit logs | **$0.00** |
 | **Realtime WebSockets** | **Supabase** | 200 concurrent connections, 2M messages/month | Active floor & rider sync | **$0.00** |
 | **Push Notifications** | **Google FCM** | **Unlimited** web and mobile push notifications | Operational dispatch alerts | **$0.00** |
-| **Crash Monitoring** | **Sentry** | 5,000 errors/month, 10,000 performance transactions | Production exception reporting | **$0.00** |
 | **Uptime Watchdog** | **UptimeRobot** | 50 monitors at 5-minute intervals, SSL alerting | `/api/health` 24/7 ping | **$0.00** |
 | **Total Cost** | | | **Capacity for 100+ orders/day** | **$0.00 / mo** |
 
@@ -174,7 +172,7 @@ All critical operations are enforced server-side:
 | **Database** | **PostgreSQL 16 (Supabase)** | Normalized schema with Row-Level Security (RLS) and Supavisor pooling. |
 | **Object Storage** | **Cloudflare R2** | Zero-egress object storage for garment inspection photos and thermal receipts. |
 | **Push Notifications**| **Firebase Cloud Messaging** | Free web push dispatch to store terminals, riders, and customers. |
-| **Observability** | **Sentry & UptimeRobot** | Application exception capture, edge latency metrics, and 24/7 uptime pings. |
+| **Observability** | **UptimeRobot & Health Watchdog** | Edge latency metrics, automated health checks, and 24/7 uptime pings. |
 | **Containerization** | **Docker & Alpine Linux** | Standalone multi-stage production container (~110MB). |
 
 ---
@@ -190,8 +188,6 @@ DhobiGhat/
 │   └── worker.ts                   # Edge reverse proxy, Web Crypto JWT & Cache API
 ├── public/                         # Brand assets & service worker
 │   └── firebase-messaging-sw.js    # FCM Web Push Service Worker
-├── sentry.client.config.ts         # Sentry client exception reporting
-├── sentry.server.config.ts         # Sentry server exception reporting
 ├── supabase-schema.sql             # PostgreSQL 16 schema, RLS policies & seed data
 ├── tests/                          # Automated Node.js native test suite (13 tests)
 │   ├── api-authorization.test.mjs  # RBAC, deletion guards & PIN privacy

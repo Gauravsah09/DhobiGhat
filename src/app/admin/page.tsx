@@ -46,7 +46,11 @@ import {
   Zap,
   Award,
   Activity,
-  Flame
+  Flame,
+  Database,
+  RefreshCw,
+  Server,
+  XCircle
 } from 'lucide-react';
 import { useLaundry } from '@/context/LaundryContext';
 import { Order, OrderStatus, StoreStaff, StoreOperatorRole, PaymentMethod, CustomerUser, IndianAddress } from '@/types';
@@ -223,6 +227,47 @@ export default function AdminConsoleApp() {
   const [reportRiderShift, setReportRiderShift] = useState<'all' | 'morning' | 'evening'>('all');
   const [reportExportFeedback, setReportExportFeedback] = useState('');
 
+  // Database Connection Test State
+  const [isTestingDb, setIsTestingDb] = useState(false);
+  const [dbTestResult, setDbTestResult] = useState<{
+    success: boolean;
+    message: string;
+    details?: {
+      status?: string;
+      latencyMs?: number;
+      endpoint?: string;
+      serviceRoleKeyConfigured?: boolean;
+      missing?: string[];
+      hint?: string;
+      code?: string;
+      tables?: Record<string, { count: number; ok: boolean }>;
+      timestamp?: string;
+    };
+  } | null>(null);
+  const [showDbModal, setShowDbModal] = useState(false);
+
+  const handleTestDbConnection = async () => {
+    setIsTestingDb(true);
+    try {
+      const res = await fetch('/api/admin/db-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      setDbTestResult(data);
+      setShowDbModal(true);
+    } catch (err: any) {
+      setDbTestResult({
+        success: false,
+        message: err?.message || 'Network connection failed while contacting DB test API.',
+        details: { hint: 'Ensure the application server is running and reachable.' },
+      });
+      setShowDbModal(true);
+    } finally {
+      setIsTestingDb(false);
+    }
+  };
+
   // Total metrics
   const totalRevenue = orders.reduce((sum, o) => sum + o.grandTotal, 0);
   const totalKg = orders.reduce((sum, o) => sum + (o.recordedWeightKg || 0), 0);
@@ -341,6 +386,17 @@ export default function AdminConsoleApp() {
               <Archive className="w-3.5 h-3.5" />
               <span>Order Archive</span>
             </Link>
+
+            <button
+              type="button"
+              onClick={handleTestDbConnection}
+              disabled={isTestingDb}
+              className="px-3 py-1.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition-all flex items-center gap-1.5 disabled:opacity-50"
+              title="Test Live Connection between Application and Supabase PostgreSQL Database"
+            >
+              <Database className={`w-3.5 h-3.5 text-cyan-400 ${isTestingDb ? 'animate-spin' : ''}`} />
+              <span>{isTestingDb ? 'Testing DB...' : 'Test DB Connection'}</span>
+            </button>
 
             <Link
               href="/store"
@@ -473,6 +529,87 @@ export default function AdminConsoleApp() {
                 </div>
               </div>
 
+            </div>
+
+            {/* Cloud Infrastructure & Database Connectivity Card */}
+            <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+                    <Database className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-extrabold text-sm uppercase text-slate-200">Supabase Cloud Database Connectivity</h3>
+                      {dbTestResult ? (
+                        dbTestResult.success ? (
+                          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                            Connected ({dbTestResult.details?.latencyMs ?? 0}ms)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                            Connection Failed
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                          Not Tested In Current Session
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Probe live PostgreSQL connection, verify RLS security policies, and measure round-trip API latency.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleTestDbConnection}
+                    disabled={isTestingDb}
+                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs shadow-lg shadow-cyan-600/20 flex items-center gap-2 transition-all disabled:opacity-50 active:scale-95 shrink-0"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isTestingDb ? 'animate-spin' : ''}`} />
+                    <span>{isTestingDb ? 'Probing Database...' : 'Test Connection'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {dbTestResult && (
+                <div
+                  className={`p-4 rounded-2xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                    dbTestResult.success
+                      ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-200'
+                      : 'bg-rose-950/30 border-rose-500/30 text-rose-200'
+                  }`}
+                >
+                  <div className="flex items-start gap-2.5">
+                    {dbTestResult.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <div className="font-bold">{dbTestResult.message}</div>
+                      {dbTestResult.details?.endpoint && (
+                        <div className="text-[11px] opacity-80 font-mono mt-0.5">
+                          Endpoint: {dbTestResult.details.endpoint} • Latency: {dbTestResult.details.latencyMs}ms
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDbModal(true)}
+                    className="underline text-xs font-bold text-sky-400 hover:text-sky-300 self-start sm:self-auto shrink-0"
+                  >
+                    View Diagnostic Report ➔
+                  </button>
+                </div>
+              )}
             </div>
 
           </div>
@@ -3276,6 +3413,152 @@ export default function AdminConsoleApp() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* SUPABASE DB CONNECTION TEST MODAL */}
+        {showDbModal && dbTestResult && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200">
+              
+              <div className="flex justify-between items-start border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                    <Database className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-white">Database Connection Test</h3>
+                    <p className="text-xs text-slate-400">Application to Supabase DB Diagnostic Probe</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDbModal(false)}
+                  className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Status Banner */}
+              {dbTestResult.success ? (
+                <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-200 space-y-2">
+                  <div className="flex items-center gap-2 font-black text-sm">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                    <span>Connection Successful</span>
+                  </div>
+                  <p className="text-xs text-emerald-300/90 leading-relaxed">
+                    {dbTestResult.message}
+                  </p>
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-500/40 text-rose-200 space-y-2">
+                  <div className="flex items-center gap-2 font-black text-sm">
+                    <XCircle className="w-5 h-5 text-rose-400" />
+                    <span>Connection Failed</span>
+                  </div>
+                  <p className="text-xs text-rose-300/90 leading-relaxed">
+                    {dbTestResult.message}
+                  </p>
+                </div>
+              )}
+
+              {/* Diagnostic Details Grid */}
+              <div className="bg-slate-950/60 rounded-2xl border border-slate-800 p-4 space-y-3 text-xs">
+                <div className="font-bold uppercase tracking-wider text-slate-400 text-[10px]">
+                  Connection Telemetry
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+                    <div className="text-[10px] text-slate-500 font-semibold uppercase">Latency</div>
+                    <div className="text-base font-black font-mono text-cyan-400 mt-0.5">
+                      {dbTestResult.details?.latencyMs != null ? `${dbTestResult.details.latencyMs} ms` : 'N/A'}
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+                    <div className="text-[10px] text-slate-500 font-semibold uppercase">Status</div>
+                    <div className={`text-base font-black mt-0.5 ${dbTestResult.success ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {dbTestResult.success ? 'Operational' : 'Unreachable'}
+                    </div>
+                  </div>
+                </div>
+
+                {dbTestResult.details?.endpoint && (
+                  <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-0.5">
+                    <div className="text-[10px] text-slate-500 font-semibold uppercase">Target Endpoint</div>
+                    <div className="font-mono text-slate-300 break-all text-[11px]">
+                      {dbTestResult.details.endpoint}
+                    </div>
+                  </div>
+                )}
+
+                {/* Table Probes Breakdown */}
+                {dbTestResult.details?.tables && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="text-[10px] text-slate-500 font-semibold uppercase">Verified Tables & Live Records</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {Object.entries(dbTestResult.details.tables).map(([tbl, info]) => (
+                        <div key={tbl} className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-center">
+                          <div className="font-mono text-[10px] text-slate-400 truncate">{tbl}</div>
+                          <div className="font-black text-sm font-mono text-white mt-0.5">{info.count}</div>
+                          <div className="text-[9px] font-bold text-emerald-400 mt-0.5">
+                            {info.ok ? '✓ OK' : '✕ Error'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Hints / Troubleshooting */}
+                {dbTestResult.details?.hint && (
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 space-y-1">
+                    <div className="font-bold text-[10px] uppercase flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-amber-400" />
+                      Troubleshooting Guidance
+                    </div>
+                    <div className="text-[11px] leading-relaxed text-amber-200/90">
+                      {dbTestResult.details.hint}
+                    </div>
+                  </div>
+                )}
+
+                {dbTestResult.details?.missing && dbTestResult.details.missing.length > 0 && (
+                  <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 space-y-1">
+                    <div className="font-bold text-[10px] uppercase">Missing Variables:</div>
+                    <ul className="list-disc list-inside font-mono text-[10px]">
+                      {dbTestResult.details.missing.map((key) => (
+                        <li key={key}>{key}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={handleTestDbConnection}
+                  disabled={isTestingDb}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs flex items-center gap-2 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isTestingDb ? 'animate-spin' : ''}`} />
+                  <span>{isTestingDb ? 'Retesting...' : 'Test Again'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowDbModal(false)}
+                  className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-extrabold text-xs shadow-lg shadow-sky-600/25 transition-all"
+                >
+                  Done
+                </button>
+              </div>
+
             </div>
           </div>
         )}
